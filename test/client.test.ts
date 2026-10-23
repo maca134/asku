@@ -113,13 +113,14 @@ function agent(cmd: string[], env: Record<string, string>) {
   return { home, run };
 }
 
+// The first test to start each client: PowerShell and Git Bash cold starts on Windows CI take several seconds.
 test("clients report the same version", async () => {
   const versions = await Promise.all(
     clients.filter((c) => c.on).map(async (c) => (await agent(c.cmd, {}).run(["version"])).out.trim()),
   );
   expect(versions[0]).toMatch(/^\d+\.\d+\.\d+$/);
-  expect(new Set(versions).size).toBe(1);
-});
+  for (const version of versions) expect(version).toBe(versions[0]);
+}, 60_000);
 
 for (const c of clients) {
   test.skipIf(!c.on)(
