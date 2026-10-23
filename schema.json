@@ -257,12 +257,12 @@
       "properties": {
         "say": { "type": "string", "minLength": 1, "maxLength": 10000 },
         "progress": {
-          "description": "Makes the update a progress bar, labelled by say. A later update with the same say moves that bar instead of adding a line. done <= total uses Ajv's $data.",
+          "description": "Makes the update a progress bar, labelled by say. A later update with the same say moves that bar instead of adding a line. done must not exceed total: the page ignores an update where it does.",
           "type": "object",
           "required": ["done", "total"],
           "additionalProperties": false,
           "properties": {
-            "done": { "type": "integer", "minimum": 0, "maximum": { "$data": "1/total" } },
+            "done": { "type": "integer", "minimum": 0 },
             "total": { "type": "integer", "minimum": 1 }
           }
         }

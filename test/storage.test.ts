@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { received, rename, type State, summary } from "../ui/session/storage";
+import { merge, received, rename, type State, summary } from "../ui/session/storage";
 
 const fresh = (): State => ({ priv: {} as CryptoKey, key: "k", answered: [] });
 
@@ -47,4 +47,15 @@ test("a session lists under its name, or a fallback, with its last activity", ()
     joined: true,
     active: 100,
   });
+});
+
+test("saving an older copy keeps what another tab or the service worker saved", () => {
+  const stored = { ...fresh(), answered: [1, 2], asked: [1, 2, 3] };
+  const page = { ...fresh(), answered: [1], asked: [1, 4], name: "Deploy plan" };
+  merge(page, stored);
+  expect(page.answered.toSorted()).toEqual([1, 2]);
+  expect(page.asked?.toSorted()).toEqual([1, 2, 3, 4]);
+  expect(page.name).toBe("Deploy plan");
+  merge(page, undefined);
+  expect(page.answered.toSorted()).toEqual([1, 2]);
 });

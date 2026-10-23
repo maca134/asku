@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { conditionProblem, visibility } from "../ui/form/when";
+import { conditionProblem, countShown, visibility } from "../ui/form/when";
 import type { Item } from "../ui/types";
 
 const go: Item = { id: "go", type: "confirm", label: "Go?" };
@@ -67,4 +67,12 @@ test("a delegated question delegates its dependents; hidden ones hide theirs", (
   expect([...chain(false, false, "prod").values()]).toEqual(["shown", "hidden", "hidden"]);
   expect([...chain(true, false, "prod").values()]).toEqual(["shown", "shown", "shown"]);
   expect([...chain(true, false, "staging").values()]).toEqual(["shown", "shown", "hidden"]);
+});
+
+test("only shown questions count: a hidden or delegated dependent is not one to answer", () => {
+  const batch = (goValue: unknown, goDelegated = false) =>
+    countShown([field(go, goValue, goDelegated), field(note({ id: "go", is: true }, "a")), field(checks)]);
+  expect(batch(true)).toBe(3);
+  expect(batch(false)).toBe(2);
+  expect(batch(undefined, true)).toBe(2);
 });

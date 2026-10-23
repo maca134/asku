@@ -306,14 +306,16 @@ function Send-Asku([switch]$NoWait) {
     foreach ($n in Get-Batches 'q') {
         $f = Join-Path $S "q$n.json"
         $seq = [int](Get-State 'seq' 0) + 1
+        $said = [IO.File]::ReadAllText($f).StartsWith('{"say":')
+        $path = if ($said) { "/s/$sid/q?push=0" } else { "/s/$sid/q" } # push=0: a say, so no "new questions" notification
         $envelope = Protect-AskuMessage $keys $sid 'q' $seq ([IO.File]::ReadAllBytes($f)) | ConvertTo-Json -Compress
         do {
-            $r = Invoke-AskuRequest POST "/s/$sid/q" $envelope
+            $r = Invoke-AskuRequest POST $path $envelope
             if (-not $r) { if ((Get-Date) -ge $deadline) { Pending "Could not reach the relay at $Base; questions are still queued." }; Start-Sleep 2 }
         } until ($r)
         if ($r.Code -ne 204 -and -not ($r.Code -eq 409 -and $r.Body -match 'duplicate')) { Fail "send failed ($($r.Code)): $($r.Body)" } # duplicate: an earlier run sent it
         Set-State 'seq' $seq
-        if ([IO.File]::ReadAllText($f).StartsWith('{"say":')) { Remove-Item $f; continue }
+        if ($said) { Remove-Item $f; continue }
         Move-Item -Force $f (Join-Path $S "o$seq.json")
         $d = Join-Path $S "d$n"
         if (Test-Path $d) { Move-Item -Force $d (Join-Path $S "d$seq") }

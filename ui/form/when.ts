@@ -41,4 +41,7 @@ export function visibility(fields: Answerable[]) {
   return states;
 }
 
+export const countShown = (fields: Answerable[]) =>
+  [...visibility(fields).values()].filter((state) => state === "shown").length;
+
 const matches = (value: unknown, is: string | boolean) => (Array.isArray(value) ? value.includes(is) : value === is);

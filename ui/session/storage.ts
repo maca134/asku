@@ -58,36 +58,40 @@ async function open(mode: IDBTransactionMode) {
   return (await database).transaction("s", mode).objectStore("s");
 }
 
-async function run<T>(mode: IDBTransactionMode, request: (store: IDBObjectStore) => IDBRequest<T>) {
-  const pending = request(await open(mode));
-  return new Promise<T>((resolve, reject) => {
+const settle = <T>(pending: IDBRequest<T>) =>
+  new Promise<T>((resolve, reject) => {
     pending.onsuccess = () => resolve(pending.result);
     pending.onerror = () => reject(pending.error);
   });
+
+export const load = async (sid: string) =>
+  settle<State | undefined>((await open("readonly")).get(sid)).catch(() => undefined);
+export const drop = async (sid: string) => settle((await open("readwrite")).delete(sid)).catch(() => {});
+
+// Another tab or the service worker may have saved since this copy was loaded: keep the seqs it recorded.
+export function merge(state: State, stored: State | undefined) {
+  for (const seq of stored?.answered ?? []) if (!state.answered.includes(seq)) state.answered.push(seq);
+  for (const seq of stored?.asked ?? []) received(state, seq);
 }
 
-export const load = (sid: string) =>
-  run<State | undefined>("readonly", (store) => store.get(sid)).catch(() => undefined);
-export const drop = (sid: string) => run("readwrite", (store) => store.delete(sid)).catch(() => {});
-
-export function save(sid: string, state: State) {
-  state.active = Date.now();
-  return run("readwrite", (store) => store.put(state, sid)).catch(() => {});
-}
-
-// Every session this browser holds, most recently active first.
-export async function list() {
-  const rows: Summary[] = [];
+// Read, merge and write in one transaction, so no other save lands in between.
+export async function save(sid: string, state: State) {
   try {
-    const cursor = (await open("readonly")).openCursor();
-    await new Promise((resolve, reject) => {
-      cursor.onsuccess = () => {
-        if (!cursor.result) return resolve(rows);
-        rows.push(summary(String(cursor.result.key), cursor.result.value));
-        cursor.result.continue();
-      };
-      cursor.onerror = () => reject(cursor.error);
-    });
+    const store = await open("readwrite");
+    merge(state, await settle<State | undefined>(store.get(sid)));
+    state.active = Date.now();
+    await settle(store.put(state, sid));
   } catch {}
-  return rows.sort((a, b) => b.active - a.active);
+}
+
+export async function list() {
+  try {
+    const store = await open("readonly");
+    const [sids, states] = await Promise.all([settle(store.getAllKeys()), settle<State[]>(store.getAll())]);
+    const rows = states.map((state, i) => summary(String(sids[i]), state));
+    return rows.sort((earlier, later) => later.active - earlier.active);
+  } catch (error) {
+    console.error(error); // no IndexedDB (some private modes): nothing to list
+    return [];
+  }
 }

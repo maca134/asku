@@ -273,7 +273,7 @@ export function relay({
     return sql.has.get(session.sid, "q", seq) !== null;
   }
 
-  async function post(req: Request, session: Session, direction: Direction) {
+  async function post(req: Request, session: Session, direction: Direction, push: boolean) {
     const { sid } = session;
     const keyHash = direction === "q" ? session.agentKeyHash : session.browserKeyHash;
     if (!authorized(req, keyHash)) return fail(401, "unauthorized");
@@ -292,7 +292,7 @@ export function relay({
       return fail(409, "duplicate"); // lost a race with an identical seq
     }
     notify(sid);
-    if (direction === "q") pushQuestion(session, seq);
+    if (direction === "q" && push) pushQuestion(session, seq);
     return empty();
   }
 
@@ -369,7 +369,8 @@ export function relay({
       case "POST q":
       case "POST a":
       case "POST m":
-        return post(req, session, action as Direction);
+        // push=0: the agent's status update (say), not a question; the relay learns only that much
+        return post(req, session, action as Direction, url.searchParams.get("push") !== "0");
     }
     return fail(405, "method not allowed");
   }

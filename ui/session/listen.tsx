@@ -76,7 +76,8 @@ export function listen(session: Session) {
 
   const place = async (seq: number, message: Question | Say) => {
     if ("say" in message) {
-      if (validSay(message)) say(message);
+      // the schema can't compare two fields: done <= total is checked here
+      if (validSay(message) && !(message.progress && message.progress.done > message.progress.total)) say(message);
       return;
     }
     const valid = validQuestion(message);
