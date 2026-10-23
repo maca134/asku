@@ -1,9 +1,12 @@
-# Keeps the pinned action SHAs and the base image digest current.
+# Keeps the pinned action SHAs, the base image digest and the npm packages current.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: monthly }
   - package-ecosystem: docker
+    directory: /
+    schedule: { interval: monthly }
+  - package-ecosystem: npm
     directory: /
     schedule: { interval: monthly }
