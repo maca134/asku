@@ -92,7 +92,7 @@ Unanswered optional questions go in `skipped`. Questions the user hands back wit
 Plaintext shapes are defined in [`schema.json`](schema.json).
 
 ### Frontend
-[`ui/`](ui): `bun run build` writes `dist/` (hashed assets with SRI; the schema validator is compiled at build time because the CSP forbids eval). The relay serves the site's pages (`/`, `/how`, `/security`, `/demo`, `/install`, `/start`, `/terms`, each with its own head and static copy from [`ui/pages.ts`](ui/pages.ts)), `/a/:sid` (answer) and `/j/:sid` (tells a human that link is for the agent, `noindex`) from it, the files in [`ui/static/`](ui/static) (icons, share image, `robots.txt`, `sitemap.xml`), plus the skill: `/skill.md` ([`skill/SKILL.md`](skill/SKILL.md)), `/ask.sh`, `/ask.ps1` and `/schema.json`.
+[`ui/`](ui): `bun run build` writes `dist/` (hashed assets with SRI; the schema validator is compiled at build time because the CSP forbids eval). The relay serves the site's pages (`/`, `/how`, `/security`, `/demo`, `/install`, `/start`, `/terms`, each with its own head and static copy from [`ui/site/pages.ts`](ui/site/pages.ts)), `/a/:sid` (answer) and `/j/:sid` (tells a human that link is for the agent, `noindex`) from it, the files in [`ui/static/`](ui/static) (icons, share image, `robots.txt`, `sitemap.xml`), plus the skill: `/skill.md` ([`skill/SKILL.md`](skill/SKILL.md)), `/ask.sh`, `/ask.ps1` and `/schema.json`.
 The page keeps key pair B (non-extractable) and its write key in IndexedDB, so a reload or a closed tab carries on. The relay rejects a second binding, so the session stays tied to the first browser that opened it.
 
 ### Agent CLI

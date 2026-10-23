@@ -6,7 +6,7 @@ import standalone from "ajv/dist/standalone";
 import { watch } from "node:fs";
 import { cp, rm } from "node:fs/promises";
 import schema from "./schema.json";
-import { ORIGIN, PAGES, type Page } from "./ui/pages";
+import { ORIGIN, PAGES, type Page } from "./ui/site/pages";
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 const SHARE = { title: "asku: your agent has questions", description: "Answer an AI agent's questions in an end-to-end encrypted form." };
