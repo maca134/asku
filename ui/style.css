@@ -2171,7 +2171,20 @@ details.comment textarea {
   flex: 1;
   min-width: 0;
   height: 0.5em;
-  accent-color: var(--accent);
+  appearance: none;
+  border: 0;
+  border-radius: 1em;
+  overflow: hidden;
+  background: var(--line);
+}
+.meter-row progress::-webkit-progress-bar {
+  background: var(--line);
+}
+.meter-row progress::-webkit-progress-value {
+  background: var(--accent);
+}
+.meter-row progress::-moz-progress-bar {
+  background: var(--accent);
 }
 .meter-count {
   display: flex;
