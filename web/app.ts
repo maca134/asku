@@ -16,11 +16,11 @@ type Item = {
   placeholder?: string; multiline?: boolean; maxLength?: number;
 };
 type Mood = "confident" | "excited" | "nervous" | "begging" | "grumpy" | "sheepish";
-type Question = { title?: string; md?: string; questions: Item[]; deadline?: number; sent?: number; mood?: Mood };
+type Question = { title?: string; name?: string; md?: string; questions: Item[]; deadline?: number; sent?: number; mood?: Mood };
 // seqs: the batches an answer covers, always the first key (ask.sh matches it at the start); declined: the user chose not to answer
 type Answer = { seqs?: number[]; answers: Record<string, unknown>; skipped: string[]; comments: Record<string, string>; note: string; delegated?: string[]; declined?: true; error?: string };
 // pubA is unset while a session this browser created waits for its agent; pubB, T and note are only kept until then.
-type State = { priv: CryptoKey; key: string; answered: number[]; pubA?: string; pubB?: string; T?: string; note?: string };
+type State = { priv: CryptoKey; key: string; answered: number[]; start?: number; pubA?: string; pubB?: string; T?: string; note?: string };
 type Kid = Node | string | null | undefined | false;
 
 const app = document.getElementById("app")!;
@@ -93,8 +93,26 @@ function shell(kids: Kid[], tag: "main" | "div" = "main") {
   const answering = tag === "main" && location.pathname.startsWith("/a/");
   return h("div", { className: "shell" },
     // no home link on an answer page: one stray tap would lose a half-filled form
-    h("header", { className: "topbar" }, logo(answering ? undefined : "/"), answering ? bellBtn() : null, h("span", { className: "e2e" }, icon("lock"), "End-to-end encrypted")),
+    h("header", { className: "topbar" }, logo(answering ? undefined : "/"), answering ? sess : null, answering ? bellBtn() : null, h("span", { className: "e2e", title: "End-to-end encrypted" }, icon("lock"), h("span", { textContent: "End-to-end encrypted" }))),
     h(tag, { className: "shell-main" }, ...kids));
+}
+
+// ---- session name (set by the agent) and running time, in the top bar and the tab title
+const sessName = h("b");
+const sessTime = h("span", { className: "sess-time", title: "Session running time" });
+const sess = h("span", { className: "sess" }, sessName, sessTime);
+const tabTitle = () => (sessName.textContent ? `${sessName.textContent} · asku` : "asku");
+function nameSession(name: string) {
+  sessName.textContent = sessName.title = name;
+  if (!document.title.startsWith("●")) document.title = tabTitle();
+}
+function clock(start: number) {
+  const tick = () => {
+    const s = Math.floor((Date.now() - start) / 1000), hr = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
+    sessTime.textContent = `${hr ? `${hr}:${String(m).padStart(2, "0")}` : m}:${String(s % 60).padStart(2, "0")}`;
+  };
+  tick();
+  setInterval(tick, 1000);
 }
 
 // ---- pings: a buzz (Android) and, if the user turned the bell on, a beep when the agent asks something new
@@ -320,6 +338,7 @@ function buildForm(q: Question) {
   const form = h("form", { className: "qform", noValidate: true },
     q.title || q.md || q.mood ? h("header", { className: "qform-head" }, q.title ? h("h1", { textContent: q.title }) : null, q.mood ? moodEl(q.mood) : null, q.md ? md(q.md, "context") : null) : null,
     tail,
+    h("p", { className: "fine", textContent: "Sent by an AI agent. Don't enter passwords or payment details." }),
     err,
     h("div", { className: "submit-bar" }, progress, btn));
 
@@ -528,7 +547,7 @@ function render(sid: string, keys: Keys, st: State, batches: Batch[], done: () =
       said.textContent = text;
       if (!chip.isConnected) f.form.append(chip);
       seen.observe(el);
-      if (document.hidden) document.title = "● asku: new questions";
+      if (document.hidden) document.title = `● New questions · ${tabTitle()}`;
     },
   };
   part(seq, f.fields.slice(), q);
@@ -536,11 +555,11 @@ function render(sid: string, keys: Keys, st: State, batches: Batch[], done: () =
   f.form.onsubmit = (e) => { e.preventDefault(); submit(parts); };
   show(f.form);
   scrollTo(0, 0);
-  if (document.hidden) document.title = "● asku: question waiting";
+  if (document.hidden) document.title = `● Question waiting · ${tabTitle()}`;
   return o;
 }
 
-document.addEventListener("visibilitychange", () => { if (!document.hidden && document.title.startsWith("●")) document.title = "asku"; });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && document.title.startsWith("●")) document.title = tabTitle(); });
 
 // Text with a copy button. It wraps, so a long link stays readable on a phone.
 function copyable(text: string, prompt?: string, label = "Copy") {
@@ -772,6 +791,8 @@ function listen(sid: string, keys: Keys, st: State) {
   status("wait", "Connected", "Waiting for the agent's question. This page updates by itself, keep it open.");
   const es = new EventSource(`/s/${sid}/q`);
   const born = Date.now(); // batches in the first moments are replays after a reload: no ping
+  if (!st.start) { st.start = born; save(sid, st); }
+  clock(st.start);
   let cur: Open | null = null;
   let later: Batch[] = []; // arrived while an answer was being sent: placed once it's done
   let chain: Promise<unknown> = Promise.resolve(); // decrypting and placing are async: keep batches in order
@@ -812,6 +833,7 @@ function listen(sid: string, keys: Keys, st: State) {
       if (cur) return;
       return status("error", "This question can't be shown", "The agent sent a form this page doesn't understand. It has been told; wait for a corrected one.", live("Waiting for the agent…"));
     }
+    if (q.name || (!sessName.textContent && q.title)) nameSession(q.name ?? q.title!); // no name yet: the first title will do
     if (cur) cur.add([seq, q]);
     else cur = render(sid, keys, st, [[seq, q]], done);
     if (Date.now() - born > 1500) ping(q.mood);

@@ -100,8 +100,11 @@ and exits `0` at once. Use it for progress on long work between questions; keep 
 - `deadline` (seconds, on the form): the page counts down, and when time runs out `wait` returns a `timeout` answer
   instead of waiting forever. Use it when you can go ahead without the user; say what you'll do in `md`
   ("If you don't answer in 10 min, I'll deploy to staging"), then do it.
+- `name` (on the form, ≤ 60 chars): names the session in the user's browser tab and top bar, e.g. `"shop: CSV export"`.
+  Set it on the first form so the user can tell sessions apart; set it again on a later form to rename.
 - `mood` (on the form): `confident`, `excited`, `nervous`, `begging`, `grumpy` or `sheepish`. Changes the form's look.
   Optional and just for fun; `nervous` suits risky actions.
+- Never ask for passwords, tokens, API keys or other secrets: answers land in your context. Ask the user to put them in an env var or file themselves.
 - Unknown fields are rejected. Full schema: https://asku.dev/schema.json
 
 ## Answer format

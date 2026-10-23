@@ -345,6 +345,10 @@ h3 { letter-spacing: -.012em; }
 .topbar { width: 100%; max-width: 38em; margin: 0 auto; padding: .85em 1em; display: flex; align-items: center; justify-content: space-between; gap: 1em; }
 .topbar .logo { font-size: 1.05em; }
 .e2e { display: inline-flex; align-items: center; gap: .35em; padding: .35em .75em .35em .6em; font-size: .76em; font-weight: 620; color: var(--ok); background: var(--ok-soft); border-radius: 999px; white-space: nowrap; }
+.sess { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: .5em; font-size: .82em; color: var(--muted); }
+.sess b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 620; color: var(--fg); }
+.sess-time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 34em) { .topbar:has(.sess b:not(:empty)) .e2e span { display: none; } } /* a phone: the name gets the room */
 .e2e .icon { width: 1.1em; height: 1.1em; stroke-width: 2.2; }
 .shell-main { flex: 1; width: 100%; max-width: 38em; margin: 0 auto; padding: .25em 1em 2em; }
 .shell-main:has(> .qform) { padding-bottom: 0; }
