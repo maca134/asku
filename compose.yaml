@@ -1,7 +1,8 @@
 # Relay behind a Cloudflare Tunnel. No published ports: only cloudflared can reach the relay,
 # so cf-connecting-ip can't be forged. Needs TUNNEL_TOKEN in .env next to this file.
 # Deploys: publishing a GitHub Release pushes ghcr.io/maca134/asku:latest (.github/workflows/release.yml);
-# watchtower below pulls it and restarts the relay. `docker compose up -d --build` still builds locally.
+# the host's own Watchtower (label-enable, logged in to ghcr.io) pulls it and restarts the relay.
+# `docker compose up -d --build` still builds locally.
 services:
   relay:
     image: ghcr.io/maca134/asku:latest
@@ -22,17 +23,6 @@ services:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
     depends_on:
       - relay
-
-  # Updates only containers labelled watchtower.enable=true (the relay), checking every 5 minutes.
-  # ponytail: polling, not a webhook; add a deploy step to release.yml if 5 minutes is too slow
-  watchtower:
-    image: containrrr/watchtower:1.7.1
-    command: --label-enable --cleanup --interval 300
-    restart: unless-stopped
-    environment:
-      DOCKER_API_VERSION: "1.44" # watchtower 1.7.1 defaults to an API version newer Docker engines refuse
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   data:

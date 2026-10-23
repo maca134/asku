@@ -125,7 +125,7 @@ Trust `ASKU_IP_HEADER` only when nothing but the proxy can reach the port, or an
 echo "TUNNEL_TOKEN=…" > .env    # cf tunnels token get <tunnel id>
 docker compose up -d            # pulls ghcr.io/maca134/asku:latest; --build builds from a checkout instead
 ```
-Releases deploy themselves: publishing a GitHub Release runs the tests and pushes `ghcr.io/maca134/asku:<version>` and `:latest` ([release.yml](.github/workflows/release.yml)), and the stack's Watchtower pulls `:latest` within 5 minutes. Roll back with `image: ghcr.io/maca134/asku:<older version>`.
+Releases deploy themselves: publishing a GitHub Release runs the tests and pushes `ghcr.io/maca134/asku:<version>` and `:latest` ([release.yml](.github/workflows/release.yml)), and the host's Watchtower (label-enable, logged in to ghcr.io, hourly) pulls `:latest`; the package is private. Roll back with `image: ghcr.io/maca134/asku:<older version>`.
 asku.dev runs this as `/opt/stacks/asku` on prox-ovh2's `docker` LXC. The SQLite file is in the `asku_data` volume.
 POST bodies must be `application/json`. Writes take `Authorization: Bearer <key>`; reads only need the sid.
 
