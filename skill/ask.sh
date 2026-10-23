@@ -3,6 +3,8 @@
 # ponytail: LibreSSL (macOS /usr/bin/openssl) lacks `dgst -macopt hexkey`; hand-rolled HMAC if macOS agents matter.
 set -euo pipefail
 
+VERSION=1.0.0 # keep in step with ask.ps1
+
 SPKI_P256=3059301306072a8648ce3d020106082a8648ce3d030107034200
 
 hex()    { od -An -v -tx1 | tr -d ' \n'; }
@@ -182,6 +184,7 @@ case "${1:-}" in
     resume ;;
   join) join "${2:-}"; resume ;;
   wait) resume ;;
+  version) echo "$VERSION" ;;
   close)
     if [ -f "$S/sid" ]; then req DELETE "/s/$(state sid)" || true; fi
     rm -rf "$S" ;;
@@ -191,6 +194,7 @@ usage: $0 ask <questions.json | ->   send a question, print the answer JSON
        $0 join <agent link>          join a session the user started, print their opening note
        $0 wait                       keep waiting after PENDING
        $0 close                      end the session
+       $0 version                    print the client version
 exit: 0 answered, 1 error, 2 PENDING (run wait)
 env: ASKU_URL ASKU_SESSION ASKU_HOME ASKU_WAIT
 USAGE

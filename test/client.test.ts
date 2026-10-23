@@ -87,6 +87,12 @@ function agent(cmd: string[], env: Record<string, string>) {
   return { home, run };
 }
 
+test("clients report the same version", async () => {
+  const versions = await Promise.all(clients.filter((c) => c.on).map(async (c) => (await agent(c.cmd, {}).run(["version"])).out.trim()));
+  expect(versions[0]).toMatch(/^\d+\.\d+\.\d+$/);
+  expect(new Set(versions).size).toBe(1);
+});
+
 for (const c of clients) {
   test.skipIf(!c.on)(`${c.name} against a local relay`, async () => {
     const { home, run } = agent(c.cmd, { ASKU_URL: base, ASKU_SESSION: "t", ASKU_WAIT: "1" });

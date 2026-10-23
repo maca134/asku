@@ -1,6 +1,7 @@
 # asku agent client. PowerShell 5.1 + .NET Framework only. Keep this file ASCII: PS 5.1 reads BOM-less files as ANSI.
 param([string]$Command, [string]$File)
 $ErrorActionPreference = 'Stop'
+$Version = '1.0.0' # keep in step with ask.sh
 
 function ConvertTo-AskuHex([byte[]]$Bytes) { [BitConverter]::ToString($Bytes).Replace('-', '').ToLower() }
 
@@ -242,6 +243,7 @@ usage: $PSCommandPath ask <questions.json>   send a question, print the answer J
        $PSCommandPath join <agent link>      join a session the user started, print their opening note
        $PSCommandPath wait                   keep waiting after PENDING
        $PSCommandPath close                  end the session
+       $PSCommandPath version                print the client version
 exit: 0 answered, 1 error, 2 PENDING (run wait)
 env: ASKU_URL ASKU_SESSION ASKU_HOME ASKU_WAIT
 "@
@@ -258,6 +260,7 @@ switch ($Command) {
     }
     'join' { Join-AskuSession $File; Resume-Asku }
     'wait' { Resume-Asku }
+    'version' { [Console]::Out.Write("$Version`n") }
     'close' {
         if (Test-Path (Join-Path $S 'sid')) { $null = Invoke-AskuRequest DELETE "/s/$(Get-State 'sid')" }
         Remove-Session

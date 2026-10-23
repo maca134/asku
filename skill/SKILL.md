@@ -30,6 +30,7 @@ Below, `ask` means whichever script you use.
 | `ask join <link>` | Join a session the user started on asku.dev; returns their opening note |
 | `ask wait` | Keep waiting for the answer after `PENDING` |
 | `ask close` | End the session and purge it from the relay |
+| `ask version` | Print the client version |
 
 Exit codes, check every time:
 - `0`: answer JSON on stdout.

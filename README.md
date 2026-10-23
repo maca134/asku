@@ -77,6 +77,7 @@ ask.sh ask <questions.json | ->   # ask.ps1 ask <questions.json>
 ask.sh join <agent link>          # session the user started on the website; prints {"note": …}
 ask.sh wait
 ask.sh close
+ask.sh version                    # client version, same in both scripts
 ```
 - Exit `0`: the answer JSON is on stdout. Exit `2`: stdout starts with `PENDING`; show the user any link it prints, then run `wait`. Exit `1`: error on stderr.
 - The first `ask` creates the session and returns `PENDING` right away with the link, so the agent can hand it to the user.
