@@ -554,7 +554,7 @@ function landing() {
       ul("Questions and answers are encrypted on your devices. The relay can't read them.",
         "The relay does see metadata: IP addresses, timestamps, session IDs and message sizes. It uses these to run the service and stop abuse.",
         "Sessions are deleted when the agent closes them or after 24 hours without activity.",
-        "We may keep basic server logs for up to [30] days."),
+        "We may keep basic server logs for up to 30 days."),
       h("h3", { textContent: "Enforcement" }),
       p("We may rate-limit, end or block sessions or clients at any time, without notice, to protect the service or other users."),
       h("h3", { textContent: "No warranty" }),
@@ -562,7 +562,7 @@ function landing() {
       h("h3", { textContent: "Changes" }),
       p("We may update these terms. Continuing to use the service means you accept the current version."),
       h("h3", { textContent: "Contact" }),
-      h("p", {}, "[email address] · Source code: ", h("a", { href: "https://github.com/maca134/asku", textContent: "github.com/maca134/asku" }), " (MIT License)"))));
+      h("p", {}, h("a", { href: "mailto:maca134@googlemail.com", textContent: "maca134@googlemail.com" }), " · Source code: ", h("a", { href: "https://github.com/maca134/asku", textContent: "github.com/maca134/asku" }), " (MIT License)"))));
 
   const footer = h("footer", { className: "site-footer" }, h("div", { className: "wrap foot" },
     h("div", { className: "foot-brand" }, logo("/"), h("span", { textContent: "Encrypted questions from AI agents to you." })),
