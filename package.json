@@ -3,10 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "bun build.ts",
+    "start": "bun src/relay.ts",
     "test": "bun test",
     "vectors": "bun test/gen-vectors.ts > test/vectors.json"
   },
   "devDependencies": {
-    "ajv": "^8.17.1"
+    "ajv": "^8.17.1",
+    "dompurify": "^3.4.17",
+    "marked": "^18.1.1"
   }
 }

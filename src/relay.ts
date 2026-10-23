@@ -53,8 +53,8 @@ async function body(req: Request) {
   return req.json().catch(() => null);
 }
 
-export function relay({ port = 0, hostname, db: path = ":memory:", holdMs = 25_000, ipHeader }: {
-  port?: number; hostname?: string; db?: string; holdMs?: number; ipHeader?: string;
+export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${import.meta.dir}/../dist`, holdMs = 25_000, ipHeader }: {
+  port?: number; hostname?: string; db?: string; dist?: string; holdMs?: number; ipHeader?: string;
 } = {}) {
   const db = new Database(path, { create: true, strict: true });
   db.run("pragma journal_mode = wal");
@@ -142,14 +142,25 @@ export function relay({ port = 0, hostname, db: path = ":memory:", holdMs = 25_0
     return h.length > LIMITS.createPerIp;
   }
 
+  // Built frontend (bun run build). Paths are matched by strict regexes before reaching here.
+  async function file(path: string, cache: string) {
+    const f = Bun.file(`${dist}/${path}`);
+    if (!(await f.exists())) return fail(404, "not found");
+    return new Response(f, { headers: { "cache-control": cache } });
+  }
+
   const authed = (req: Request, key: string | null) =>
     key !== null && sha(req.headers.get("authorization")?.replace(/^Bearer /, "") ?? "") === key;
 
   async function route(req: Request, srv: Server): Promise<Response> {
     const url = new URL(req.url);
+    const m = req.method;
+    if (m === "GET" && (url.pathname === "/" || /^\/a\/[\w-]{22}$/.test(url.pathname))) return file("index.html", "no-store");
+    const asset = url.pathname.match(/^\/assets\/([\w-]+\.(?:js|css))$/);
+    if (m === "GET" && asset) return file(`assets/${asset[1]}`, "public, max-age=31536000, immutable");
+
     const [, root, sid, sub, extra] = url.pathname.split("/");
     if (root !== "s" || extra !== undefined) return fail(404, "not found");
-    const m = req.method;
 
     if (!sid) {
       if (m !== "POST") return fail(405, "method not allowed");
@@ -228,7 +239,7 @@ export function relay({ port = 0, hostname, db: path = ":memory:", holdMs = 25_0
     maxRequestBodySize: LIMITS.body,
     async fetch(req, srv) {
       const res = await route(req, srv).catch((e) => { console.error(e); return fail(500, "internal error"); });
-      for (const [k, v] of Object.entries(HEADERS)) res.headers.set(k, v);
+      for (const [k, v] of Object.entries(HEADERS)) if (!res.headers.has(k)) res.headers.set(k, v);
       return res;
     },
   });

@@ -54,7 +54,12 @@ Verify TAG in constant time BEFORE decrypt.
 ## v1 controls
 `confirm`, `single`, `multi`, `text`, `number`, plus markdown context (DOMPurify) and an implicit per-question comment field.
 Answer shape: `{ "answers": { "<id>": value }, "skipped": [], "comments": { "<id>": "" }, "note": "" }`.
+Unanswered optional questions go in `skipped`. If a question fails schema validation in the browser, the agent gets back `{ …, "error": "invalid question: …" }` instead.
 Plaintext shapes are defined in [`schema.json`](schema.json).
+
+## Frontend
+[`web/`](web): `bun run build` writes `dist/` (hashed assets with SRI; the schema validator is compiled at build time because the CSP forbids eval). The relay serves `/` and `/a/:sid` from it.
+The page keeps key pair B (non-extractable) and its write key in IndexedDB, so a reload or a closed tab carries on. The relay rejects a second binding, so the session stays tied to the first browser that opened it.
 
 ## Agent CLI
 `skill/ask.sh` and `skill/ask.ps1` take the same commands:
@@ -88,7 +93,7 @@ POST bodies must be `application/json`. Writes take `Authorization: Bearer <key>
 | browser | `POST /s/:sid/a` envelope, browser key | `204`; `seq` must match an asked q not yet answered, else `409` |
 
 Errors are `{error}` with `400 401 404 409 413 429`. The relay stores only sha256 of write keys.
-The browser must persist its key pair B (non-extractable `CryptoKey` in IndexedDB) and write key: the fragment is cleared after first load.
+
 
 ## Relay hygiene
 - Payload cap 256 KB, 8 MB and 1000 questions per session. Per-IP rate limit on session creation (20 / 10 min).

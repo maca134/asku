@@ -128,7 +128,8 @@
           "additionalProperties": { "type": "string", "maxLength": 10000 },
           "default": {}
         },
-        "note": { "type": "string", "maxLength": 10000, "default": "" }
+        "note": { "type": "string", "maxLength": 10000, "default": "" },
+        "error": { "type": "string", "maxLength": 2000, "description": "Set by the browser when it could not show the question, e.g. it failed schema validation." }
       }
     }
   }

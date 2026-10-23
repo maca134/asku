@@ -90,3 +90,28 @@ test("rate limits session creation per IP", async () => {
   for (let i = 0; i < LIMITS.createPerIp + 1; i++) statuses.push((await call("POST", "/s", { pub: v.pubA })).status);
   expect(statuses.at(-1)).toBe(429);
 });
+
+test("serves the page and hashed assets", async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
+  const dist = mkdtempSync(`${require("node:os").tmpdir()}/asku-dist-`);
+  mkdirSync(`${dist}/assets`);
+  writeFileSync(`${dist}/index.html`, "<!doctype html>");
+  writeFileSync(`${dist}/assets/app-abc123.js`, "1");
+  const s = relay({ dist });
+  const at = (p: string) => fetch(s.server.url.href.replace(/\/$/, "") + p);
+  try {
+    for (const p of ["/", "/a/abcdefghijklmnopqrstuv"]) {
+      const res = await at(p);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/html");
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      expect(res.headers.get("content-security-policy")).toContain("script-src 'self'");
+    }
+    const js = await at("/assets/app-abc123.js");
+    expect(js.headers.get("cache-control")).toContain("immutable");
+    expect(js.headers.get("content-security-policy")).toContain("default-src 'none'");
+    for (const p of ["/assets/nope.js", "/assets/..%2Findex.html", "/a/short", "/index.html"]) expect((await at(p)).status).toBe(404);
+  } finally {
+    s.stop();
+  }
+});
