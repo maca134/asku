@@ -1020,6 +1020,9 @@ h3 {
   .points {
     grid-template-columns: 1fr 1fr;
   }
+  .point:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
 }
 .point {
   display: flex;

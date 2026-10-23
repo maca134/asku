@@ -90,7 +90,7 @@ const steps = () => (
       "03",
       "phone",
       "You answer",
-      "Tap through yes/no, choices, text and numbers. Add comments. It's encrypted before it leaves the page.",
+      "Tap through yes/no, choices, dates, rankings and approvals. Add comments. It's encrypted before it leaves the page.",
     )}
     {step(
       "04",
@@ -219,14 +219,22 @@ const FEATURES = [
   "Yes / no",
   "Pick one",
   "Pick several",
+  "Write-in Other",
   "Text",
-  "Number",
+  "Number or slider",
+  "Date and time",
+  "Rank",
+  "Approve / reject",
+  "Conditional questions",
   "Markdown",
   "Comments",
   "Let the agent decide",
   "Deadlines",
   "Moods",
   "Note",
+  "Progress bars",
+  "Message or STOP the agent",
+  "Push notifications",
 ];
 
 export const controls = () => (
@@ -237,7 +245,7 @@ export const controls = () => (
           {sectionHead(
             "The form",
             "Built for answering with one thumb",
-            "Agents get five controls, markdown for context, deadlines and moods. Every question takes a comment, or can be left to the agent. Try it: this is the real form, and the panel shows exactly what your agent would receive.",
+            "Agents get eight question types, markdown for context, deadlines and moods. Every question takes a comment, or can be left to the agent. Try it: this is the real form, and the panel shows exactly what your agent would receive.",
           )}
           <ul className="chips">
             {FEATURES.map((feature) => (
@@ -260,9 +268,23 @@ const GALLERY: Item[] = [
     label: "Target",
     options: ["staging", { value: "prod", label: "Production", md: "Live traffic" }],
     default: "staging",
+    other: true,
   },
   { id: "ctl-checks", type: "multi", label: "Run checks", options: ["lint", "test", "e2e"], min: 1 },
+  {
+    id: "ctl-steps",
+    type: "review",
+    label: "Migration steps",
+    options: [
+      "Drop old index",
+      "Backfill column",
+      { value: "lock", label: "Lock table", md: "Blocks writes for ~2 min" },
+    ],
+  },
+  { id: "ctl-order", type: "rank", label: "Fix these first", options: ["Login bug", "Slow search", "Dark mode"] },
+  { id: "ctl-when", type: "date", label: "Deploy window", time: true, default: "2026-11-03T09:30" },
   { id: "ctl-pct", type: "number", label: "Canary %", min: 0, max: 100, step: 5, default: 10 },
+  { id: "ctl-share", type: "number", label: "Traffic share %", display: "slider", min: 0, max: 100, step: 5 },
   { id: "ctl-name", type: "text", label: "Release name", placeholder: "e.g. Autumn cleanup" },
   {
     id: "ctl-notes",
@@ -280,7 +302,15 @@ const controlCard = (label: string, content: HTMLElement, className = "") => (
   </div>
 );
 
-const typeLabel = (item: Item) => `type: ${item.type}${item.type === "text" && item.multiline ? " · multiline" : ""}`;
+function typeLabel(item: Item) {
+  const flags = [
+    item.type === "text" && item.multiline && "multiline",
+    (item.type === "single" || item.type === "multi") && item.other && "other",
+    item.type === "date" && item.time && "time",
+    item.type === "number" && item.display === "slider" && "slider",
+  ].filter(Boolean);
+  return [`type: ${item.type}`, ...flags].join(" · ");
+}
 
 // tap a chip and a sample question puts that mood on
 function moodPicker() {
