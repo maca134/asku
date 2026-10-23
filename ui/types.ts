@@ -47,6 +47,9 @@ export type Question = {
 // `ask say`: a one-way update, never answered
 export type Say = { say: string };
 
+// the user to the agent, outside any form: dir m
+export type Message = { message: string } | { stop: true };
+
 // seqs: the batches an answer covers, always the first key (ask.sh matches it at the start)
 export type Answer = {
   seqs?: number[];

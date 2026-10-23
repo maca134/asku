@@ -6,6 +6,8 @@ export const sessionName = h("b");
 const sessionTime = <span className="sess-time" title="Session running time" />;
 // filled by session/push.tsx when the relay can send push notifications
 export const pushSlot = <span className="push-slot" />;
+// filled by session/chat.tsx once joined: the user's messages to the agent and STOP
+export const chatSlot = <div className="chat-slot" />;
 
 export function shell(children: Child[], tag: "main" | "div" = "main") {
   const answering = tag === "main" && location.pathname.startsWith("/a/");
@@ -121,7 +123,8 @@ export function ping(mood?: Mood) {
   beep();
 }
 
-// The session as one feed, oldest first: the agent's updates (`ask say`), its forms, and what became of them.
+// The session as one feed, oldest first: the agent's updates (`ask say`), its forms, what became of them, and the
+// user's messages.
 // Whatever the page is doing now (waiting, an error) shows under it.
 const feed = <ol className="feed" ariaLabel="Session" />;
 const announcer = <p className="sr-only" ariaLive="polite" />;
@@ -135,6 +138,11 @@ export function addToFeed(item: HTMLElement) {
 export function say(text: string) {
   addToFeed(<li className="say">{markdown(text)}</li>);
   announcer.textContent = text;
+}
+
+// the user's own message: plain text, not markdown
+export function said(text: string) {
+  addToFeed(<li className="said">{text}</li>);
 }
 
 export const batchName = (question: Question) => question.title || question.questions[0].label;
@@ -165,7 +173,7 @@ export function statePanel(kind: Kind, title: string, detail?: string, ...extra:
 
 // After swapping screens, move focus to the new heading so keyboard and screen-reader users land on it.
 export function show(...children: Child[]) {
-  app.replaceChildren(shell([feed, announcer, children]));
+  app.replaceChildren(shell([feed, announcer, children, chatSlot]));
   const heading = app.querySelector<HTMLElement>(".shell-main > :not(.feed) h1");
   if (heading) {
     heading.tabIndex = -1;

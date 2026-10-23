@@ -27,6 +27,15 @@ test("bad shapes are rejected", () => {
   expect(valid("say", { say: "hi", questions: [] })).toBe(false);
 });
 
+test("message: text or STOP from the user, nothing else", () => {
+  expect(valid("message", { message: "use staging" })).toBe(true);
+  expect(valid("message", { stop: true })).toBe(true);
+  expect(valid("message", { message: "" })).toBe(false);
+  expect(valid("message", { stop: false })).toBe(false);
+  expect(valid("message", {})).toBe(false);
+  expect(valid("message", { message: "hi", answers: {} })).toBe(false);
+});
+
 test("other: a write-in on single and multi only", () => {
   expect(valid("question", q({ type: "single", options: ["a"], other: true, default: "typed" }))).toBe(true);
   expect(valid("question", q({ type: "multi", options: ["a"], other: true, default: ["a", "typed"] }))).toBe(true);

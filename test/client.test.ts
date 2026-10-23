@@ -85,6 +85,11 @@ function peer(sid: string, keys: Keys, key: string) {
         204,
       );
     },
+    async message(seq: number, message: unknown) {
+      expect((await post(`/s/${sid}/m`, await seal(keys, sid, "m", seq, JSON.stringify(message)), key)).status).toBe(
+        204,
+      );
+    },
   };
 }
 
@@ -304,6 +309,46 @@ for (const c of clients) {
       expect(JSON.parse(res.out).timeout).toBe(true);
       await b.answer(3, { answers: { x: true }, skipped: [], comments: {}, note: "" }); // too late: nobody is listening
       expect((await run(["wait"])).code).toBe(1);
+
+      expect((await run(["close"])).code).toBe(0);
+    },
+    120_000,
+  );
+
+  test.skipIf(!c.on)(
+    `${c.name} prints the user's messages once, and STOP as exit 3`,
+    async () => {
+      const { home, run } = agent(c.cmd, { ASKU_URL: base, ASKU_SESSION: "t", ASKU_WAIT: "30" });
+      const lines = (out: string) => out.trimEnd().split("\n");
+      const link = (await run(["ask", `${home}/q.json`])).out.match(/https?:\/\/\S+#\S+/)![0];
+      const b = await browser(link);
+
+      // a message alone ends the wait early, ahead of the PENDING it would print later
+      const waiting = run(["wait"]);
+      await b.question(1);
+      const text = 'use "staging" — 日本語';
+      await b.message(1, { message: text });
+      let res = await waiting;
+      expect(res.code).toBe(2);
+      expect(JSON.parse(lines(res.out)[0])).toEqual({ message: text });
+      expect(lines(res.out)[1]).toBe("PENDING");
+
+      // with an answer: messages first, the answer JSON last
+      const a1 = { answers: { go: true }, skipped: [], comments: {}, note: "" };
+      await b.message(2, { message: "also lint" });
+      await b.answer(1, a1);
+      res = await run(["wait"]);
+      expect(res.code).toBe(0);
+      expect(lines(res.out).map((line) => JSON.parse(line))).toEqual([{ message: "also lint" }, a1]);
+
+      // say picks them up too; STOP makes it exit 3
+      await b.message(3, { stop: true });
+      res = await run(["say", "stopping"]);
+      expect(res.code).toBe(3);
+      expect(lines(res.out)).toEqual(['{"stop":true}', "Said."]);
+      res = await run(["say", "stopped"]);
+      expect([res.code, res.out]).toEqual([0, "Said.\n"]); // each message only once
+      expect((await b.question(3)).say).toBe("stopped");
 
       expect((await run(["close"])).code).toBe(0);
     },

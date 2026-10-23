@@ -3,7 +3,7 @@
 # ponytail: LibreSSL (macOS /usr/bin/openssl) lacks `dgst -macopt hexkey`; hand-rolled HMAC if macOS agents matter.
 set -euo pipefail
 
-VERSION=1.3.0 # keep in step with ask.ps1
+VERSION=1.4.0 # keep in step with ask.ps1
 
 SPKI_P256=3059301306072a8648ce3d020106082a8648ce3d030107034200
 
@@ -74,7 +74,8 @@ command -v openssl >/dev/null && command -v curl >/dev/null || { echo "asku: nee
 [ "${1:-}" = close ] || [ ! -f "$S/sid" ] || [ -f "$S/a.pem" ] || { echo "asku: session '${ASKU_SESSION:-default}' belongs to ask.ps1; use it, or set ASKU_SESSION" >&2; exit 1; }
 
 die() { echo "asku: $*" >&2; exit 1; }
-pending() { printf 'PENDING\n%s\nRun again to keep waiting: %s wait\n' "$1" "$0"; exit 2; }
+STOP= # 3 once the user pressed STOP: every exit then uses it
+pending() { printf 'PENDING\n%s\nRun again to keep waiting: %s wait\n' "$1" "$0"; exit "${STOP:-2}"; }
 jget() { sed -n "s/.*\"$1\":\"\{0,1\}\([^\",}]*\).*/\1/p"; } # flat JSON of base64 and ints only
 state() { cat "$S/$1" 2>/dev/null || echo "${2:-}"; }
 
@@ -155,7 +156,32 @@ timedout() {
   printf '{"seqs":[%s],"answers":{},"skipped":[%s],"comments":{},"note":"","timeout":true}\n' "$(echo "$@" | tr ' ' ,)" "${ids%,}"
   left=$(batches o | grep -c . || true)
   [ "$left" = 0 ] || echo "asku: $left batch(es) still pending; run: $0 wait" >&2
-  exit 0
+  exit "${STOP:-0}"
+}
+
+# A JSON array of flat envelopes, one per line.
+envelopes() { local list=${1#[} nl=$'}\n{'; list=${list%]}; printf '%s\n' "${list//\},\{/$nl}"; }
+
+# messages < envelopes: prints the user's messages (dir m) in order, each once. Sets SHOWN, and STOP on a stop.
+messages() {
+  local e seq text
+  SHOWN=
+  while IFS= read -r e; do
+    [ "$(printf %s "$e" | jget dir)" = m ] || continue
+    seq=$(( $(state m 0) + 1 ))
+    text=$(open "$(state K)" "$(state sid)" m "$seq" "$(printf %s "$e" | jget iv)" "$(printf %s "$e" | jget ct)" \
+      "$(printf %s "$e" | jget tag)") || die "a message failed verification"
+    printf '%s\n' "$text"
+    echo "$seq" > "$S/m"
+    SHOWN=1
+    if [[ $text == '{"stop":true'* ]]; then STOP=3; fi
+  done
+}
+
+# inbox: prints messages that came in since the last call, without waiting for any.
+inbox() {
+  req GET "/s/$(state sid)/m?after=$(state m 0)" || return 0
+  [ "$CODE" != 200 ] || messages < <(envelopes "$BODY")
 }
 
 # add <file | ->: queues a batch onto the open form, starting a session (and printing its link) if there is none.
@@ -245,7 +271,7 @@ send() {
 
 # Waits for the next answer to an open batch and prints it. One answer can cover several batches (its seqs).
 answer() {
-  local sid after list nl e env seq text covered n left
+  local sid after list e env seq text covered n left
   n=$(expired q); [ -z "$n" ] || timedout $n
   send
   sid=$(state sid)
@@ -254,14 +280,17 @@ answer() {
   after=$(( $(batches o | head -n1) - 1 ))
   while :; do
     [ $SECONDS -lt $DEADLINE ] || pending "The user has not answered yet.$([ ! -f "$S/T" ] || printf ' If they lost the page, their link is: %s' "$(link)")"
-    req GET "/s/$sid/a?after=$after" || { sleep 2; continue; }
+    req GET "/s/$sid/a?after=$after&m=$(state m 0)" || { sleep 2; continue; }
     case $CODE in
-      200) list=${BODY#[}; list=${list%]}; nl=$'}\n{'; env=
-           # flat envelopes in seq order, one per line: take the first for a batch still open
+      200) list=$(envelopes "$BODY"); env=
+           messages <<< "$list"
+           # answers in seq order: take the first for a batch still open
            while IFS= read -r e; do
+             [ "$(printf %s "$e" | jget dir)" = a ] || continue
              seq=$(printf %s "$e" | jget seq)
              if [ -f "$S/o$seq.json" ]; then env=$e; break; fi
-           done <<< "${list//\},\{/$nl}"
+           done <<< "$list"
+           [ -n "$env" ] || [ -z "$SHOWN" ] || pending "The user has not answered yet."
            if [ -z "$env" ]; then # all already handled; keep the cursor, a lower seq can still arrive
              n=$(expired o); [ -z "$n" ] || timedout $n
              sleep 2; continue
@@ -277,7 +306,7 @@ answer() {
            printf '%s\n' "$text"
            left=$(batches o | grep -c . || true)
            [ "$left" = 0 ] || echo "asku: $left batch(es) still pending; run: $0 wait" >&2
-           exit 0 ;;
+           exit "${STOP:-0}" ;;
       204) n=$(expired o); [ -z "$n" ] || timedout $n ;; # checked after a poll, so an answer that beat the deadline wins
       404) gone ;;
       *) die "answer poll failed ($CODE): $BODY" ;;
@@ -294,13 +323,16 @@ case "$CMD" in
   add)
     add "${2:-}"
     send nowait || pending "Queued. The user has not opened the link yet. Give them: $(link)"
+    inbox
     pending "Sent. Add more with add, or run wait for the answer." ;;
   join) join "${2:-}"; answer ;;
   say)
     shift
     say "$@"
     send nowait || { echo "Queued: it shows once the user opens the link."; exit 0; }
-    echo "Said." ;;
+    inbox
+    echo "Said."
+    exit "${STOP:-0}" ;;
   wait) answer ;;
   version) echo "$VERSION" ;;
   close)
@@ -315,7 +347,8 @@ usage: $0 ask <questions.json | ->   send a question, print the answer JSON
        $0 wait                       keep waiting after PENDING
        $0 close                      end the session
        $0 version                    print the client version
-exit: 0 answered, 1 error, 2 PENDING (run wait)
+the user's messages print first, one JSON line each: {"message":"..."} or {"stop":true}
+exit: 0 answered, 1 error, 2 PENDING (run wait), 3 the user pressed STOP
 env: ASKU_URL ASKU_SESSION ASKU_HOME ASKU_WAIT
 USAGE
     exit 1 ;;

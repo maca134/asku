@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://asku.dev/schema.json",
   "title": "asku plaintext payloads",
-  "description": "Plaintext inside the encrypted envelope. dir=q carries a Question, dir=a carries an Answer.",
+  "description": "Plaintext inside the encrypted envelope. dir=q carries a Question, dir=a carries an Answer, dir=m a Message.",
   "$defs": {
     "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
     "markdown": { "type": "string", "maxLength": 65536 },
@@ -256,6 +256,17 @@
       "additionalProperties": false,
       "properties": {
         "say": { "type": "string", "minLength": 1, "maxLength": 10000 }
+      }
+    },
+    "message": {
+      "description": "dir=m: the user writing to the agent outside any form, or pressing STOP. The client prints it on the agent's next call.",
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "message": { "type": "string", "minLength": 1, "maxLength": 10000 },
+        "stop": { "const": true, "description": "Stop working and confirm with the user." }
       }
     },
     "answer": {

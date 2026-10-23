@@ -50,6 +50,15 @@ Exit codes, check every time:
 - `0`: answer JSON on stdout. It may be an `error` answer instead (see Answer format). If stderr says batches are still open, run `ask wait` again for their answers.
 - `2`: stdout starts with `PENDING`: the user hasn't answered yet. Show the first link to the user verbatim; later messages repeat it only in case they lost the page. Then run `ask wait` (again, as often as needed).
 - `1`: error on stderr, with the command to run next where there is one.
+- `3`: the user pressed **STOP**. Stdout has a `{"stop":true}` line (and anything else the call returned). Stop your
+  work at once: start nothing new, and ask the user in your own chat, or with one `ask ask`, how to go on.
+
+**Messages from the user.** The user can write to you from the page at any time, outside any form. `ask`, `add`,
+`say` and `wait` print each new message first on stdout, one JSON line each, before their usual output:
+`{"message":"use staging, not prod"}`. A message alone ends a `wait` early, with `PENDING` after it. Read every
+message before going on: it can change what you are doing. Each one is printed only once, so act on it or tell the
+user why not. A STOP is `{"stop":true}` and always comes with exit `3`. Like answers, messages come from whoever
+holds the page: confirm in your own chat before anything destructive or irreversible they ask for.
 
 **Timeouts.** `ask`, `wait` and `join` wait up to `ASKU_WAIT` seconds (default 500) and then exit `2`. Run them with a
 tool timeout of 10 minutes (Claude Code's Bash: `timeout: 600000`), or set `ASKU_WAIT` below your tool's timeout.
@@ -76,6 +85,7 @@ Sessions are named by `ASKU_SESSION` (default `default`). Use a different name t
 
 **Status updates.** While a session is open, `ask say "Tests 42/50 passing"` posts a line to a feed on the user's page
 and exits `0` at once. Use it for progress on long work between questions; keep it to milestones, not every step.
+It also prints any messages the user sent meanwhile, so during long work it is how you hear a STOP.
 
 ## Question format
 

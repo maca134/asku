@@ -8,6 +8,7 @@ import { question as validQuestion, say as validSay } from "../gen/validate.js";
 import {
   addToFeed,
   batchName,
+  chatSlot,
   feedEvent,
   homeLink,
   live,
@@ -20,6 +21,7 @@ import {
   status,
 } from "../page";
 import type { Answer, Question, Say } from "../types";
+import { chat } from "./chat";
 import { offerPush } from "./push";
 import { type Session, sendAnswer } from "./send";
 import { drop, received, rename, save } from "./storage";
@@ -115,6 +117,7 @@ export function listen(session: Session) {
     );
   };
 
+  queue(() => chat(session)); // first in the queue: the user's earlier messages before the replayed questions
   navigator.serviceWorker?.addEventListener("message", ({ data }) => {
     const seq = data?.answered;
     if (data?.sid !== sid || !Number.isSafeInteger(seq)) return;
@@ -127,6 +130,7 @@ export function listen(session: Session) {
   events.addEventListener("close", () => {
     events.close();
     drop(sid);
+    chatSlot.replaceChildren();
     status(
       "done",
       "Session ended",
@@ -138,8 +142,10 @@ export function listen(session: Session) {
     );
   });
   events.onerror = () => {
-    if (events.readyState === EventSource.CLOSED)
+    if (events.readyState === EventSource.CLOSED) {
+      chatSlot.replaceChildren();
       return status("error", "This session has ended or expired", undefined, newSessionLink(), homeLink());
+    }
     showReconnecting(events);
   };
 }
