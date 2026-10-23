@@ -1,8 +1,8 @@
-import { test, expect } from "bun:test";
+import { expect, test } from "bun:test";
 import Ajv from "ajv/dist/2020";
-import schema from "../schema.json";
-import question from "../examples/question.json";
 import answer from "../examples/answer.json";
+import question from "../examples/question.json";
+import schema from "../schema.json";
 
 const ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
 ajv.addSchema(schema);

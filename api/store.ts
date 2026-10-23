@@ -1,59 +1,70 @@
 // The relay's SQLite tables: one row per session, one per stored envelope. Envelopes are opaque ciphertext.
 import { Database } from "bun:sqlite";
 
-export type Dir = "q" | "a";
-type Role = "agent" | "browser";
-// pub/role: the side that created the session. peer/mac: the side that joined it.
+export type Direction = "q" | "a";
+export type Role = "agent" | "browser";
+
+// role and creatorPub: the side that made the session. joinerPub and bindTag: the side that joined it.
+// Each side's write key is stored as a SHA-256 hash.
 export type Session = {
   sid: string;
   role: Role;
-  pub: string;
-  akey: string | null;
-  peer: string | null;
-  mac: string | null;
-  bkey: string | null;
+  creatorPub: string;
+  joinerPub: string | null;
+  bindTag: string | null;
+  agentKeyHash: string | null;
+  browserKeyHash: string | null;
   bytes: number;
 };
 
 export function openStore(path: string) {
   const db = new Database(path, { create: true, strict: true });
   db.run("pragma journal_mode = wal");
-  db.run(`create table if not exists s (
-    sid text primary key, role text not null, pub text not null, akey text,
-    peer text, mac text, bkey text, bytes integer not null default 0, touched integer not null)`);
-  db.run(`create table if not exists m (
-    sid text not null, dir text not null, seq integer not null, env text not null,
-    primary key (sid, dir, seq)) without rowid`);
+  db.run(`create table if not exists sessions (
+    sid text primary key, role text not null, creatorPub text not null, joinerPub text, bindTag text,
+    agentKeyHash text, browserKeyHash text, bytes integer not null default 0, touched integer not null)`);
+  db.run(`create table if not exists messages (
+    sid text not null, direction text not null, seq integer not null, envelope text not null,
+    primary key (sid, direction, seq)) without rowid`);
 
   const sql = {
-    get: db.query<Session, [string]>("select * from s where sid = ?"),
-    create: db.query("insert into s (sid, role, pub, akey, bkey, touched) values (?, ?, ?, ?, ?, ?)"),
-    // the joiner gets the write key for the role the creator doesn't have
-    bind: db.query(`update s set peer = ?1, mac = ?2,
-      akey = case role when 'browser' then ?3 else akey end,
-      bkey = case role when 'agent' then ?3 else bkey end
-      where sid = ?4 and peer is null`),
-    touch: db.query("update s set touched = ? where sid = ?"),
-    grow: db.query("update s set bytes = bytes + ?, touched = ? where sid = ?"),
-    last: db.query<{ n: number | null }, [string, string]>("select max(seq) n from m where sid = ? and dir = ?"),
-    has: db.query("select 1 from m where sid = ? and dir = ? and seq = ?"),
-    insert: db.query("insert into m (sid, dir, seq, env) values (?, ?, ?, ?)"),
-    after: db.query<{ seq: number; env: string }, [string, string, number]>(
-      "select seq, env from m where sid = ? and dir = ? and seq > ? order by seq",
+    session: db.query<Session, [string]>("select * from sessions where sid = ?"),
+    create: db.query(
+      "insert into sessions (sid, role, creatorPub, agentKeyHash, browserKeyHash, touched) values (?, ?, ?, ?, ?, ?)",
     ),
-    // ponytail: full scan of s per write; fine at LIMITS.sessions rows, keep a running total if that grows.
-    totals: db.query<{ n: number; b: number }, []>("select count(*) n, coalesce(sum(bytes), 0) b from s"),
-    expired: db.query<{ sid: string }, [number]>("select sid from s where touched < ?"),
-    delS: db.query("delete from s where sid = ?"),
-    delM: db.query("delete from m where sid = ?"),
+    // the joiner gets the write key for the role the creator doesn't have
+    bind: db.query(`update sessions set joinerPub = ?1, bindTag = ?2,
+      agentKeyHash = case role when 'browser' then ?3 else agentKeyHash end,
+      browserKeyHash = case role when 'agent' then ?3 else browserKeyHash end
+      where sid = ?4 and joinerPub is null`),
+    touch: db.query("update sessions set touched = ? where sid = ?"),
+    grow: db.query("update sessions set bytes = bytes + ?, touched = ? where sid = ?"),
+    lastSeq: db.query<{ seq: number | null }, [string, Direction]>(
+      "select max(seq) seq from messages where sid = ? and direction = ?",
+    ),
+    has: db.query<{ found: 1 }, [string, Direction, number]>(
+      "select 1 found from messages where sid = ? and direction = ? and seq = ?",
+    ),
+    insert: db.query("insert into messages (sid, direction, seq, envelope) values (?, ?, ?, ?)"),
+    after: db.query<{ seq: number; envelope: string }, [string, Direction, number]>(
+      "select seq, envelope from messages where sid = ? and direction = ? and seq > ? order by seq",
+    ),
+    // ponytail: full scan of sessions per write; fine at LIMITS.sessions rows, keep a running total if that grows.
+    totals: db.query<{ sessions: number; bytes: number }, []>(
+      "select count(*) sessions, coalesce(sum(bytes), 0) bytes from sessions",
+    ),
+    expired: db.query<{ sid: string }, [number]>("select sid from sessions where touched < ?"),
+    deleteSession: db.query("delete from sessions where sid = ?"),
+    deleteMessages: db.query("delete from messages where sid = ?"),
   };
+
   const purge = db.transaction((sid: string) => {
-    sql.delM.run(sid);
-    sql.delS.run(sid);
+    sql.deleteMessages.run(sid);
+    sql.deleteSession.run(sid);
   });
-  const store = db.transaction((sid: string, dir: Dir, seq: number, env: string) => {
-    sql.insert.run(sid, dir, seq, env);
-    sql.grow.run(env.length, Date.now(), sid);
+  const store = db.transaction((sid: string, direction: Direction, seq: number, envelope: string) => {
+    sql.insert.run(sid, direction, seq, envelope);
+    sql.grow.run(envelope.length, Date.now(), sid);
   });
   return { db, sql, purge, store };
 }

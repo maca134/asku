@@ -1,6 +1,6 @@
 // asku relay: stores opaque envelopes, never sees plaintext. API in README "Relay API".
-import { openStore, type Dir } from "./store";
 import type { Server } from "bun";
+import { type Direction, openStore, type Session } from "./store";
 
 export const LIMITS = {
   body: 256 * 1024,
@@ -23,59 +23,66 @@ const HEADERS = {
   "strict-transport-security": "max-age=31536000; includeSubDomains",
 };
 
-const sha = (s: string) => new Bun.CryptoHasher("sha256").update(s).digest("hex");
-const rand = (n: number) =>
-  crypto.getRandomValues(new Uint8Array(n)).toBase64({ alphabet: "base64url", omitPadding: true });
+type Body = Record<string, unknown>;
+
+const sha256Hex = (text: string) => new Bun.CryptoHasher("sha256").update(text).digest("hex");
+const randomId = (bytes: number) =>
+  crypto.getRandomValues(new Uint8Array(bytes)).toBase64({ alphabet: "base64url", omitPadding: true });
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 const fail = (status: number, error: string) => json({ error }, status);
 const empty = (status = 204) => new Response(null, { status });
 
-function b64(s: unknown, len?: number) {
-  if (typeof s !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(s)) return null;
+function decodeBase64(value: unknown, length?: number) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return null;
   try {
-    const b = Uint8Array.fromBase64(s);
-    return len === undefined || b.length === len ? b : null;
+    const bytes = Uint8Array.fromBase64(value);
+    return length === undefined || bytes.length === length ? bytes : null;
   } catch {
     return null;
   }
 }
-
-const isPub = (s: unknown) => b64(s, 65)?.[0] === 4;
+const isBase64 = (value: unknown, length?: number): value is string => decodeBase64(value, length) !== null;
+const isPublicKey = (value: unknown): value is string => decodeBase64(value, 65)?.[0] === 4;
 
 // IPv6 clients usually get a whole /64, so it shares one rate-limit quota.
 export function ipKey(ip: string) {
   if (!ip.includes(":") || ip.startsWith("::ffff:")) return ip;
   const [head, tail] = ip.split("::");
-  const a = head ? head.split(":") : [],
-    b = tail ? tail.split(":") : [];
-  const full = tail === undefined ? a : [...a, ...Array(8 - a.length - b.length).fill("0"), ...b];
-  return `${full
-    .slice(0, 4)
-    .map((x) => parseInt(x, 16).toString(16))
-    .join(":")}::/64`;
+  const left = head ? head.split(":") : [];
+  const right = tail ? tail.split(":") : [];
+  const groups = tail === undefined ? left : [...left, ...Array(8 - left.length - right.length).fill("0"), ...right];
+  const prefix = groups.slice(0, 4).map((group) => parseInt(group, 16).toString(16));
+  return `${prefix.join(":")}::/64`;
 }
 
-function envelope(x: any, dir: Dir) {
-  if (!x || typeof x !== "object" || Object.keys(x).length !== 6) return null;
-  const { v, seq, iv, ct, tag } = x;
-  const ctb = b64(ct);
+// The envelope re-serialised with only its known fields, or null if it isn't one.
+function validEnvelope(body: Body | null, direction: Direction) {
+  if (!body || Object.keys(body).length !== 6) return null;
+  const { v, seq, dir, iv, ct, tag } = body;
+  const ciphertext = decodeBase64(ct);
   const ok =
     v === 1 &&
-    x.dir === dir &&
+    dir === direction &&
+    typeof seq === "number" &&
     Number.isInteger(seq) &&
     seq >= 0 &&
     seq <= LIMITS.maxSeq &&
-    b64(iv, 16) &&
-    ctb &&
-    ctb.length % 16 === 0 &&
-    b64(tag, 32);
-  return ok ? JSON.stringify({ v, seq, dir, iv, ct, tag }) : null;
+    isBase64(iv, 16) &&
+    ciphertext !== null &&
+    ciphertext.length % 16 === 0 &&
+    isBase64(tag, 32);
+  return ok ? { seq, json: JSON.stringify({ v, seq, dir, iv, ct, tag }) } : null;
 }
 
-async function body(req: Request) {
+async function readJson(req: Request): Promise<Body | null> {
   if (!req.headers.get("content-type")?.startsWith("application/json")) return null; // forces a CORS preflight
-  return req.json().catch(() => null);
+  const body = await req.json().catch(() => null);
+  return body && typeof body === "object" ? body : null;
 }
+
+const STATIC = /^\/(robots\.txt|sitemap\.xml|og\.png|favicon\.(svg|ico)|apple-touch-icon\.png)$/;
+// The skill: SKILL.md, the agent scripts and the schema, as plain text so curl and browsers both just show them.
+const SKILL = /^\/(skill\.md|ask\.sh|ask\.ps1|schema\.json)$/;
 
 export function relay({
   port = 0,
@@ -95,20 +102,25 @@ export function relay({
   const { db, sql, purge, store } = openStore(path);
 
   // ponytail: in-process wakeups, single instance only; pub/sub (e.g. Redis) if this ever scales out.
-  const subs = new Map<string, Set<() => void>>();
-  const subscribe = (sid: string, fn: () => void) => {
-    let set = subs.get(sid);
-    if (!set) subs.set(sid, (set = new Set()));
-    set.add(fn);
+  const listeners = new Map<string, Set<() => void>>();
+  const subscribe = (sid: string, wake: () => void) => {
+    let set = listeners.get(sid);
+    if (!set) {
+      set = new Set();
+      listeners.set(sid, set);
+    }
+    set.add(wake);
     return () => {
-      set.delete(fn);
-      if (!set.size) subs.delete(sid);
+      set.delete(wake);
+      if (!set.size) listeners.delete(sid);
     };
   };
-  const notify = (sid: string) => subs.get(sid)?.forEach((fn) => fn());
+  const notify = (sid: string) => {
+    for (const wake of listeners.get(sid) ?? []) wake();
+  };
 
-  // Long-poll: answer as soon as check() returns a Response, else 204 after holdMs.
-  async function hold(sid: string, check: () => Response | undefined) {
+  // Answers as soon as check() returns a Response, else 204 after holdMs.
+  async function longPoll(sid: string, check: () => Response | undefined) {
     const end = Date.now() + holdMs;
     for (;;) {
       const res = check();
@@ -116,182 +128,197 @@ export function relay({
       const left = end - Date.now();
       if (left <= 0) return empty();
       await new Promise<void>((done) => {
-        const t = setTimeout(fin, left);
-        const unsub = subscribe(sid, fin);
-        function fin() {
-          clearTimeout(t);
-          unsub();
+        const timer = setTimeout(finish, left);
+        const unsubscribe = subscribe(sid, finish);
+        function finish() {
+          clearTimeout(timer);
+          unsubscribe();
           done();
         }
       });
     }
   }
 
-  // Browser feed of questions. Resumes from Last-Event-ID or ?after.
-  function feed(req: Request, srv: Server<undefined>, sid: string, after: number) {
-    const te = new TextEncoder();
+  // The browser's feed of questions, as server-sent events. Resumes from Last-Event-ID or ?after.
+  function questionFeed(req: Request, server: Server<undefined>, sid: string, after: number) {
+    const encoder = new TextEncoder();
     let cleanup = () => {};
     const stream = new ReadableStream({
-      start(c) {
-        const send = (s: string) => c.enqueue(te.encode(s));
-        const push = () => {
-          if (!sql.get.get(sid)) {
-            send("event: close\ndata:\n\n");
+      start(controller) {
+        const write = (text: string) => controller.enqueue(encoder.encode(text));
+        const flush = () => {
+          if (!sql.session.get(sid)) {
+            write("event: close\ndata:\n\n");
             cleanup();
-            return c.close();
+            return controller.close();
           }
-          for (const m of sql.after.all(sid, "q", after)) {
-            send(`id: ${m.seq}\nevent: q\ndata: ${m.env}\n\n`);
-            after = m.seq;
+          for (const message of sql.after.all(sid, "q", after)) {
+            write(`id: ${message.seq}\nevent: q\ndata: ${message.envelope}\n\n`);
+            after = message.seq;
           }
         };
-        const unsub = subscribe(sid, push);
-        const ping = setInterval(() => send(": ping\n\n"), 20_000);
+        const unsubscribe = subscribe(sid, flush);
+        const ping = setInterval(() => write(": ping\n\n"), 20_000);
         cleanup = () => {
           clearInterval(ping);
-          unsub();
+          unsubscribe();
         };
-        push();
+        flush();
       },
       cancel: () => cleanup(),
     });
-    srv.timeout(req, 0);
+    server.timeout(req, 0);
     return new Response(stream, { headers: { "content-type": "text/event-stream" } });
   }
 
-  const hits = new Map<string, number[]>();
-  function limited(ip: string) {
+  const recentCreates = new Map<string, number[]>();
+  function rateLimited(ip: string) {
     const now = Date.now();
-    const h = (hits.get(ip) ?? []).filter((t) => now - t < LIMITS.createWindowMs);
-    h.push(now);
-    hits.set(ip, h);
-    return h.length > LIMITS.createPerIp;
+    const times = (recentCreates.get(ip) ?? []).filter((time) => now - time < LIMITS.createWindowMs);
+    times.push(now);
+    recentCreates.set(ip, times);
+    return times.length > LIMITS.createPerIp;
   }
 
   // Built frontend (bun run build). Paths are matched by strict regexes before reaching here.
-  async function file(path: string, cache: string, type?: string, status = 200) {
-    const f = Bun.file(`${dist}/${path}`);
-    if (!(await f.exists())) return fail(404, "not found");
-    return new Response(f, { status, headers: { "cache-control": cache, ...(type && { "content-type": type }) } });
+  async function serveFile(path: string, cache: string, type?: string, status = 200) {
+    const file = Bun.file(`${dist}/${path}`);
+    if (!(await file.exists())) return fail(404, "not found");
+    return new Response(file, { status, headers: { "cache-control": cache, ...(type && { "content-type": type }) } });
   }
 
-  const authed = (req: Request, key: string | null) =>
-    key !== null && sha(req.headers.get("authorization")?.replace(/^Bearer /, "") ?? "") === key;
-
-  async function route(req: Request, srv: Server<undefined>): Promise<Response> {
-    const url = new URL(req.url);
-    const m = req.method;
-    const page = url.pathname.match(/^\/(how|security|demo|install|start|terms)?$/);
-    if (m === "GET" && page) return file(`${page[1] ?? "index"}.html`, "no-store");
-    if (m === "GET" && /^\/[aj]\/[\w-]{22}$/.test(url.pathname)) {
-      const res = await file("app.html", "no-store");
+  async function staticFile(pathname: string) {
+    const page = pathname.match(/^\/(how|security|demo|install|start|terms)?$/);
+    if (page) return serveFile(`${page[1] ?? "index"}.html`, "no-store");
+    if (/^\/[aj]\/[\w-]{22}$/.test(pathname)) {
+      const res = await serveFile("app.html", "no-store");
       res.headers.set("x-robots-tag", "noindex");
       return res;
     }
-    const asset = url.pathname.match(/^\/assets\/([\w-]+\.(?:js|css))$/);
-    if (m === "GET" && asset) return file(`assets/${asset[1]}`, "public, max-age=31536000, immutable");
-    // The skill: SKILL.md, the agent scripts and the schema, as plain text so curl and browsers both just show them.
-    if (m === "GET" && /^\/(skill\.md|ask\.sh|ask\.ps1|schema\.json)$/.test(url.pathname))
-      return file(
-        url.pathname.slice(1),
-        "no-cache",
-        url.pathname.endsWith(".json") ? "application/json" : "text/plain; charset=utf-8",
-      );
-    if (
-      m === "GET" &&
-      /^\/(robots\.txt|sitemap\.xml|og\.png|favicon\.(svg|ico)|apple-touch-icon\.png)$/.test(url.pathname)
-    )
-      return file(url.pathname.slice(1), "public, max-age=86400");
+    const asset = pathname.match(/^\/assets\/([\w-]+\.(?:js|css))$/);
+    if (asset) return serveFile(`assets/${asset[1]}`, "public, max-age=31536000, immutable");
+    const file = pathname.slice(1);
+    if (SKILL.test(pathname))
+      return serveFile(file, "no-cache", file.endsWith(".json") ? "application/json" : "text/plain; charset=utf-8");
+    if (STATIC.test(pathname)) return serveFile(file, "public, max-age=86400");
+  }
 
-    const [, root, sid, sub, extra] = url.pathname.split("/");
-    // Unknown pages get the app, which shows its own not-found page.
-    if (m === "GET" && root !== "s" && root !== "assets") return file("app.html", "no-store", undefined, 404);
-    if (root !== "s" || extra !== undefined) return fail(404, "not found");
+  const authorized = (req: Request, keyHash: string | null) =>
+    keyHash !== null && sha256Hex(req.headers.get("authorization")?.replace(/^Bearer /, "") ?? "") === keyHash;
 
-    if (!sid) {
-      if (m !== "POST") return fail(405, "method not allowed");
-      const ip = (ipHeader ? req.headers.get(ipHeader) : srv.requestIP(req)?.address) ?? "?";
-      if (limited(ipKey(ip))) return fail(429, "too many sessions");
-      const b = await body(req);
-      const role = b?.role ?? "agent";
-      if (!isPub(b?.pub) || (role !== "agent" && role !== "browser")) return fail(400, "bad pub or role");
-      if (sql.totals.get()!.n >= LIMITS.sessions) return fail(503, "relay full");
-      const s = { sid: rand(16), key: rand(32) };
-      const hash = sha(s.key);
-      sql.create.run(s.sid, role, b.pub, role === "agent" ? hash : null, role === "browser" ? hash : null, Date.now());
-      return json(s, 201);
+  async function createSession(req: Request, server: Server<undefined>) {
+    const ip = (ipHeader ? req.headers.get(ipHeader) : server.requestIP(req)?.address) ?? "?";
+    if (rateLimited(ipKey(ip))) return fail(429, "too many sessions");
+    const body = await readJson(req);
+    const role = body?.role ?? "agent";
+    const pub = body?.pub;
+    if (!isPublicKey(pub) || (role !== "agent" && role !== "browser")) return fail(400, "bad pub or role");
+    if (sql.totals.get()!.sessions >= LIMITS.sessions) return fail(503, "relay full");
+    const sid = randomId(16);
+    const key = randomId(32);
+    const keyHash = sha256Hex(key);
+    sql.create.run(sid, role, pub, role === "agent" ? keyHash : null, role === "browser" ? keyHash : null, Date.now());
+    return json({ sid, key }, 201);
+  }
+
+  async function bind(req: Request, sid: string) {
+    const body = await readJson(req);
+    const pub = body?.pub;
+    const mac = body?.mac;
+    if (!isPublicKey(pub) || !isBase64(mac, 32)) return fail(400, "bad binding");
+    const key = randomId(32);
+    if (sql.bind.run(pub, mac, sha256Hex(key), sid).changes === 0) return fail(409, "already bound");
+    notify(sid);
+    return json({ key }, 201);
+  }
+
+  // q: the next question in order. a: answers a stored question; seq 0 is the opening note of a browser-made session.
+  function inOrder(session: Session, direction: Direction, seq: number) {
+    if (direction === "q") return seq === (sql.lastSeq.get(session.sid, "q")?.seq ?? 0) + 1;
+    if (seq === 0) return session.role === "browser";
+    return sql.has.get(session.sid, "q", seq) !== null;
+  }
+
+  async function post(req: Request, session: Session, direction: Direction) {
+    const { sid } = session;
+    const keyHash = direction === "q" ? session.agentKeyHash : session.browserKeyHash;
+    if (!authorized(req, keyHash)) return fail(401, "unauthorized");
+    const envelope = validEnvelope(await readJson(req), direction);
+    if (!envelope) return fail(400, "bad envelope");
+    const { seq } = envelope;
+    // "duplicate": that seq is already stored, so a retry can count as sent; "bad seq" is a real conflict
+    if (sql.has.get(sid, direction, seq)) return fail(409, "duplicate");
+    if (!inOrder(session, direction, seq)) return fail(409, "bad seq");
+    const size = envelope.json.length;
+    if (session.bytes + size > LIMITS.sessionBytes) return fail(413, "session full");
+    if (sql.totals.get()!.bytes + size > LIMITS.totalBytes) return fail(503, "relay full");
+    try {
+      store(sid, direction, seq, envelope.json);
+    } catch {
+      return fail(409, "duplicate"); // lost a race with an identical seq
     }
+    notify(sid);
+    return empty();
+  }
 
-    const s = sql.get.get(sid);
-    if (!s) return fail(404, "no such session");
+  async function sessionRoute(req: Request, server: Server<undefined>, url: URL, sid: string, action: string) {
+    const session = sql.session.get(sid);
+    if (!session) return fail(404, "no such session");
     const after = Number(url.searchParams.get("after") ?? 0) || 0;
-    if (m === "GET" && sub && (subs.get(sid)?.size ?? 0) >= LIMITS.listeners) return fail(429, "too many listeners");
+    if (req.method === "GET" && action && (listeners.get(sid)?.size ?? 0) >= LIMITS.listeners)
+      return fail(429, "too many listeners");
 
-    switch (`${m} ${sub ?? ""}`) {
+    switch (`${req.method} ${action}`) {
       case "GET ":
-        return json({ pub: s.pub, role: s.role, bound: s.peer !== null });
+        return json({ pub: session.creatorPub, role: session.role, bound: session.joinerPub !== null });
       case "DELETE ":
-        if (!authed(req, s.akey)) return fail(401, "unauthorized");
+        if (!authorized(req, session.agentKeyHash)) return fail(401, "unauthorized");
         purge(sid);
         notify(sid);
         return empty();
-      case "POST bind": {
-        const b = await body(req);
-        if (!isPub(b?.pub) || !b64(b?.mac, 32)) return fail(400, "bad binding");
-        const key = rand(32);
-        if (sql.bind.run(b.pub, b.mac, sha(key), sid).changes === 0) return fail(409, "already bound");
-        notify(sid);
-        return json({ key }, 201);
-      }
+      case "POST bind":
+        return bind(req, sid);
       case "GET bind":
         sql.touch.run(Date.now(), sid);
-        return hold(sid, () => {
-          const s = sql.get.get(sid);
-          if (!s) return fail(404, "no such session");
-          if (s.peer) return json({ pub: s.peer, mac: s.mac });
+        return longPoll(sid, () => {
+          const current = sql.session.get(sid);
+          if (!current) return fail(404, "no such session");
+          if (current.joinerPub) return json({ pub: current.joinerPub, mac: current.bindTag });
         });
       case "GET a":
         sql.touch.run(Date.now(), sid);
-        return hold(sid, () => {
-          if (!sql.get.get(sid)) return fail(404, "no such session");
-          const rows = sql.after.all(sid, "a", after);
-          if (rows.length)
-            return new Response(`[${rows.map((r) => r.env).join(",")}]`, {
+        return longPoll(sid, () => {
+          if (!sql.session.get(sid)) return fail(404, "no such session");
+          const answers = sql.after.all(sid, "a", after);
+          if (answers.length)
+            return new Response(`[${answers.map((answer) => answer.envelope).join(",")}]`, {
               headers: { "content-type": "application/json" },
             });
         });
       case "GET q":
         sql.touch.run(Date.now(), sid);
-        return feed(req, srv, sid, Number(req.headers.get("last-event-id") ?? after) || 0);
+        return questionFeed(req, server, sid, Number(req.headers.get("last-event-id") ?? after) || 0);
       case "POST q":
-      case "POST a": {
-        const dir = sub as Dir;
-        if (!authed(req, dir === "q" ? s.akey : s.bkey)) return fail(401, "unauthorized");
-        const env = envelope(await body(req), dir);
-        if (!env) return fail(400, "bad envelope");
-        const seq = JSON.parse(env).seq;
-        // "duplicate": that seq is already stored, so a retry can count as sent; "bad seq" is a real conflict
-        if (sql.has.get(sid, dir, seq)) return fail(409, "duplicate");
-        // a seq 0 is the opening note of a browser-created session
-        const seqOk =
-          dir === "q"
-            ? seq === (sql.last.get(sid, "q")?.n ?? 0) + 1
-            : seq === 0
-              ? s.role === "browser"
-              : sql.has.get(sid, "q", seq) !== null;
-        if (!seqOk) return fail(409, "bad seq");
-        if (s.bytes + env.length > LIMITS.sessionBytes) return fail(413, "session full");
-        if (sql.totals.get()!.b + env.length > LIMITS.totalBytes) return fail(503, "relay full");
-        try {
-          store(sid, dir, seq, env);
-        } catch {
-          return fail(409, "duplicate"); // lost a race with an identical seq
-        }
-        notify(sid);
-        return empty();
-      }
+      case "POST a":
+        return post(req, session, action as Direction);
     }
     return fail(405, "method not allowed");
+  }
+
+  async function route(req: Request, server: Server<undefined>): Promise<Response> {
+    const url = new URL(req.url);
+    if (req.method === "GET") {
+      const file = await staticFile(url.pathname);
+      if (file) return file;
+    }
+    const [, root, sid, action, extra] = url.pathname.split("/");
+    // Unknown pages get the app, which shows its own not-found page.
+    if (req.method === "GET" && root !== "s" && root !== "assets")
+      return serveFile("app.html", "no-store", undefined, 404);
+    if (root !== "s" || extra !== undefined) return fail(404, "not found");
+    if (sid) return sessionRoute(req, server, url, sid, action ?? "");
+    if (req.method !== "POST") return fail(405, "method not allowed");
+    return createSession(req, server);
   }
 
   const server = Bun.serve({
@@ -299,12 +326,12 @@ export function relay({
     hostname,
     idleTimeout: 60,
     maxRequestBodySize: LIMITS.body,
-    async fetch(req, srv) {
-      const res = await route(req, srv).catch((e) => {
-        console.error(e);
+    async fetch(req, instance) {
+      const res = await route(req, instance).catch((error) => {
+        console.error(error);
         return fail(500, "internal error");
       });
-      for (const [k, v] of Object.entries(HEADERS)) if (!res.headers.has(k)) res.headers.set(k, v);
+      for (const [name, value] of Object.entries(HEADERS)) if (!res.headers.has(name)) res.headers.set(name, value);
       return res;
     },
   });
@@ -315,7 +342,8 @@ export function relay({
       notify(sid);
     }
     const now = Date.now();
-    for (const [ip, h] of hits) if (h.every((t) => now - t >= LIMITS.createWindowMs)) hits.delete(ip);
+    for (const [ip, times] of recentCreates)
+      if (times.every((time) => now - time >= LIMITS.createWindowMs)) recentCreates.delete(ip);
   }, 10 * 60_000);
 
   return {

@@ -1,9 +1,9 @@
 // Every implementation must reproduce vectors.json (generated independently by gen-vectors.ts).
-import { test, expect } from "bun:test";
+import { expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { bindTag, checkBind, checkFragment, deriveKeys, open, seal, type Envelope } from "../shared/crypto";
+import { bindTag, checkBind, checkFragment, deriveKeys, type Envelope, open, seal } from "../shared/crypto";
 import v from "./vectors.json";
 
 const b = (s: string) => Uint8Array.fromBase64(s);
@@ -49,7 +49,7 @@ test("openssl (skill/ask.sh), agent side", () => {
     return { ok: r.exitCode === 0, out: r.stdout.toString("utf8"), err: r.stderr.toString() };
   };
   // PKCS#8 DER for a bare P-256 private scalar
-  const der = Buffer.from("3041020100301306072a8648ce3d020106082a8648ce3d030107042730250201010420" + v.privA, "hex");
+  const der = Buffer.from(`3041020100301306072a8648ce3d020106082a8648ce3d030107042730250201010420${v.privA}`, "hex");
   const pem = join(mkdtempSync(join(tmpdir(), "asku-")), "a.pem");
   writeFileSync(
     pem,

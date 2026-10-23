@@ -3,19 +3,19 @@ import { afterAll, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { relay } from "../api/relay";
+import question from "../examples/question.json";
 import {
   bindTag,
   checkBind,
   checkFragment,
   deriveKeys,
   fragmentFor,
+  type Keys,
   newKeyPair,
   open,
   seal,
-  type Keys,
 } from "../shared/crypto";
-import { relay } from "../api/relay";
-import question from "../examples/question.json";
 
 const r = relay({ holdMs: 500 });
 afterAll(() => r.stop());
@@ -72,10 +72,13 @@ function peer(sid: string, keys: Keys, key: string) {
         .body!.pipeThrough(new TextDecoderStream())
         .getReader();
       let feed = "";
-      let m: RegExpMatchArray | null;
-      while (!(m = feed.match(/^data: (.*)\n\n/m))) feed += (await reader.read()).value ?? "";
+      let match = feed.match(/^data: (.*)\n\n/m);
+      while (!match) {
+        feed += (await reader.read()).value ?? "";
+        match = feed.match(/^data: (.*)\n\n/m);
+      }
       await reader.cancel();
-      return JSON.parse(await open(keys, sid, "q", seq, JSON.parse(m[1])));
+      return JSON.parse(await open(keys, sid, "q", seq, JSON.parse(match[1])));
     },
     async answer(seq: number, answer: unknown) {
       expect((await post(`/s/${sid}/a`, await seal(keys, sid, "a", seq, JSON.stringify(answer)), key)).status).toBe(
