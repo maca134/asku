@@ -117,7 +117,7 @@ ask.sh version                    # client version, same in both scripts
 - Env: `ASKU_URL` (default `https://asku.dev`), `ASKU_SESSION` (default `default`), `ASKU_HOME`, `ASKU_WAIT` (seconds before `PENDING`, default 500).
 
 ### Relay API
-[`api/relay.ts`](api/relay.ts). `bun run dev` builds and runs it on :8080, rebuilding and live-reloading on changes; `bun api/relay.ts` alone (env: `PORT`, `ASKU_DB`, `ASKU_HOST`, `ASKU_IP_HEADER`).
+[`api/relay.ts`](api/relay.ts). `bun run dev` builds and runs it on :8080, rebuilding and live-reloading on changes; `bun api/relay.ts` alone (env: `PORT`, `ASKU_DB`, `ASKU_HOST`, `ASKU_IP_HEADER`, `ASKU_VAPID_*` for push notifications).
 Trust `ASKU_IP_HEADER` only when nothing but the proxy can reach the port, or anyone can forge it and dodge the rate limit.
 
 #### Deploy
@@ -143,11 +143,19 @@ POST bodies must be `application/json`. Writes take `Authorization: Bearer <key>
 | agent | `DELETE /s/:sid`, agent key | `204`, session purged |
 | browser | `GET /s/:sid/q?after=n` | SSE: `event: q` with `id: seq`, data = envelope; `event: close` on purge. Resumes from `Last-Event-ID` |
 | browser | `POST /s/:sid/a` envelope, browser key | `204`; `seq` must match an asked q not yet answered, or be `0` (once) in a browser-created session, else `409` |
+| browser | `PUT /s/:sid/push` a `PushSubscription`, browser key | `204`: each new q sends a Web Push to it. `404` when push is off |
+| browser | `DELETE /s/:sid/push`, browser key | `204`, no more pushes for this session |
 
 Errors are `{error}` with `400 401 404 405 409 413 429`. The relay stores only sha256 of write keys.
+
+#### Push notifications
+The answer page's phone button asks for a notification on that device when the agent posts to that session; nothing is asked until it's tapped, and a second tap turns it off. The site installs as an app (`/manifest.webmanifest`, service worker `/sw.js`). Works in Chrome on Android and desktop browsers; on iOS (16.4+) only after "Add to Home Screen", with the session opened from the installed app.
+- The push ([`api/push.ts`](api/push.ts), RFC 8291 + VAPID) carries only `{sid}`. The service worker looks up the session's name in IndexedDB and shows "New questions in <name>", unless that session's page is open and visible.
+- `GET /s/:sid` adds `push` (the VAPID public key) when push is on. Endpoints must be a known push service (FCM, Mozilla, Windows, Apple). The subscription is stored with the session and goes when it's closed or expires, or when the push service says it's gone.
+- Off unless `ASKU_VAPID_PUBLIC`, `ASKU_VAPID_PRIVATE` and `ASKU_VAPID_SUBJECT` (`mailto:` or `https:` contact) are all set. `bun api/push.ts` prints a new key pair.
 
 
 ### Relay hygiene
 - Payload cap 256 KB, 8 MB and 1000 questions per session. Per-IP rate limit on session creation (20 / 10 min).
 - Purge on `close`. 24h idle TTL as fallback.
-- Headers: CSP `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` and `Referrer-Policy: no-referrer`.
+- Headers: CSP `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` and `Referrer-Policy: no-referrer`.

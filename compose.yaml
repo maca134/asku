@@ -10,6 +10,10 @@ services:
     restart: unless-stopped
     environment:
       ASKU_IP_HEADER: cf-connecting-ip
+      # push notifications, off while empty: `bun api/push.ts` prints a key pair for .env
+      ASKU_VAPID_PUBLIC: ${ASKU_VAPID_PUBLIC:-}
+      ASKU_VAPID_PRIVATE: ${ASKU_VAPID_PRIVATE:-}
+      ASKU_VAPID_SUBJECT: ${ASKU_VAPID_SUBJECT:-}
     volumes:
       - data:/data
     labels:

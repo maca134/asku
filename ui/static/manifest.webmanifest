@@ -1,0 +1,14 @@
+{
+  "name": "asku",
+  "short_name": "asku",
+  "description": "Answer an AI agent's questions in an end-to-end encrypted form.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#080a09",
+  "theme_color": "#080a09",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
