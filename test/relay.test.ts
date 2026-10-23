@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { ipKey, LIMITS, relay } from "../src/relay";
+import { ipKey, LIMITS, relay } from "../api/relay";
 import v from "./vectors.json";
 
 const r = relay({ holdMs: 300 });

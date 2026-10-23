@@ -1,10 +1,10 @@
-// End to end: each agent client against a local relay, with a simulated browser built on src/crypto.ts.
+// End to end: each agent client against a local relay, with a simulated browser built on shared/crypto.ts.
 import { afterAll, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { bindTag, checkBind, checkFragment, deriveKeys, fragmentFor, newKeyPair, open, seal, type Keys } from "../src/crypto";
-import { relay } from "../src/relay";
+import { bindTag, checkBind, checkFragment, deriveKeys, fragmentFor, newKeyPair, open, seal, type Keys } from "../shared/crypto";
+import { relay } from "../api/relay";
 import question from "../examples/question.json";
 
 const r = relay({ holdMs: 500 });

@@ -1,12 +1,12 @@
 // Builds the browser app into dist/: hashed assets with SRI, and a schema validator compiled at
 // build time (Ajv's runtime codegen needs eval, which the CSP forbids).
-// --watch: rebuild on web/ changes, reload open pages, and run the relay, restarting it on src/ changes.
+// --watch: rebuild on ui/ changes, reload open pages, and run the relay, restarting it on api/ or shared/ changes.
 import Ajv from "ajv/dist/2020";
 import standalone from "ajv/dist/standalone";
 import { watch } from "node:fs";
 import { cp, rm } from "node:fs/promises";
 import schema from "./schema.json";
-import { ORIGIN, PAGES, type Page } from "./web/pages";
+import { ORIGIN, PAGES, type Page } from "./ui/pages";
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 const SHARE = { title: "asku: your agent has questions", description: "Answer an AI agent's questions in an end-to-end encrypted form." };
@@ -47,11 +47,11 @@ function body(p: Page) {
 async function build() {
   const ajv = new Ajv({ code: { source: true, esm: true }, allErrors: true, allowUnionTypes: true });
   ajv.addSchema(schema);
-  await Bun.write("web/gen/validate.js", standalone(ajv, { question: `${schema.$id}#/$defs/question`, say: `${schema.$id}#/$defs/say` }));
+  await Bun.write("ui/gen/validate.js", standalone(ajv, { question: `${schema.$id}#/$defs/question`, say: `${schema.$id}#/$defs/say` }));
 
   await rm("dist", { recursive: true, force: true });
   const out = await Bun.build({
-    entrypoints: ["web/app.ts"],
+    entrypoints: ["ui/app.ts"],
     outdir: "dist/assets",
     naming: { entry: "[name]-[hash].[ext]", asset: "[name]-[hash].[ext]", chunk: "[name]-[hash].[ext]" },
     minify: true,
@@ -70,13 +70,13 @@ async function build() {
     await Bun.write("dist/assets/reload.js", `let last;setInterval(async()=>{try{const r=await fetch("/",{cache:"no-store"});if(!r.ok)return;const t=await r.text();if(last&&t!==last)location.reload();last=t}catch{}},1000)`);
     tags.push(`<script src="/assets/reload.js"></script>`);
   }
-  const html = (await Bun.file("web/index.html").text()).replace("<!--assets-->", tags.join("\n"));
+  const html = (await Bun.file("ui/index.html").text()).replace("<!--assets-->", tags.join("\n"));
   const page = (head: string, body: string) => html.replace("<!--head-->", head).replace("<!--body-->", body);
   for (const [path, p] of Object.entries(PAGES)) await Bun.write(`dist/${path.slice(1) || "index"}.html`, page(head(p, path), body(p)));
   await Bun.write("dist/app.html", page(head(SHARE), `<p class="boot">Loading…</p>`));
   await Bun.write("dist/sitemap.xml", `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${
     Object.keys(PAGES).map((path) => `<url><loc>${ORIGIN}${path}</loc></url>`).join("\n")}\n</urlset>\n`);
-  await cp("web/static", "dist", { recursive: true });
+  await cp("ui/static", "dist", { recursive: true });
   for (const [from, to] of [["skill/SKILL.md", "skill.md"], ["skill/ask.sh", "ask.sh"], ["skill/ask.ps1", "ask.ps1"], ["schema.json", "schema.json"]])
     await Bun.write(`dist/${to}`, Bun.file(from));
   console.log(out.outputs.map((o) => `${o.path} ${o.size}`).join("\n"));
@@ -85,11 +85,11 @@ async function build() {
 const watching = process.argv.includes("--watch");
 await build();
 if (watching) {
-  Bun.spawn(["bun", "--watch", "src/relay.ts"], { stdio: ["inherit", "inherit", "inherit"] });
+  Bun.spawn(["bun", "--watch", "api/relay.ts"], { stdio: ["inherit", "inherit", "inherit"] });
   let timer: Timer | undefined;
   // ponytail: skill/ and schema.json edits still need a restart of the dev script; watch them too if that bites.
-  watch("web", { recursive: true }, (_, file) => {
-    if (!file || /^gen[\\/]/.test(file)) return; // build writes web/gen, don't loop on it
+  watch("ui", { recursive: true }, (_, file) => {
+    if (!file || /^gen[\\/]/.test(file)) return; // build writes ui/gen, don't loop on it
     clearTimeout(timer);
     timer = setTimeout(() => build().catch((e) => console.error(e)), 100);
   });

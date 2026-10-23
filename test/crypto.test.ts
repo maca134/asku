@@ -3,7 +3,7 @@ import { test, expect } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { bindTag, checkBind, checkFragment, deriveKeys, open, seal, type Envelope } from "../src/crypto";
+import { bindTag, checkBind, checkFragment, deriveKeys, open, seal, type Envelope } from "../shared/crypto";
 import v from "./vectors.json";
 
 const b = (s: string) => Uint8Array.fromBase64(s);
@@ -11,7 +11,7 @@ const flip = (s: string) => { const x = b(s); x[0] ^= 1; return x.toBase64(); };
 const envelope = ({ pt, ...env }: (typeof v.messages)[number]) => env as Envelope;
 const utf8 = (s: string) => Buffer.from(s, "utf8").toString("base64");
 
-test("webcrypto (src/crypto.ts), browser side", async () => {
+test("webcrypto (shared/crypto.ts), browser side", async () => {
   const p = b(v.pubB);
   const u = (x: Uint8Array) => x.toBase64({ alphabet: "base64url", omitPadding: true });
   const jwk = { kty: "EC", crv: "P-256", d: u(Uint8Array.fromHex(v.privB)), x: u(p.slice(1, 33)), y: u(p.slice(33)) };

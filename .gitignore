@@ -3,5 +3,5 @@ node_modules/
 *.db-shm
 *.db-wal
 dist/
-web/gen/
+ui/gen/
 .env
