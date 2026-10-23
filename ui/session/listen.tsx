@@ -3,6 +3,7 @@ import { open } from "../../shared/crypto";
 import { app } from "../dom";
 import type { Form } from "../form/form";
 import { type Batch, OpenForm, type Send } from "../form/open";
+import { conditionProblem } from "../form/when";
 import { question as validQuestion, say as validSay } from "../gen/validate.js";
 import {
   addToFeed,
@@ -90,7 +91,9 @@ export function listen(session: Session) {
       deferred.push([seq, message]);
       return;
     }
-    const problem = !valid ? schemaErrors() : current ? clash(current.form, message) : null;
+    const problem = !valid
+      ? schemaErrors()
+      : (conditionProblem(message.questions) ?? (current ? clash(current.form, message) : null));
     if (problem) return reject(seq, problem);
     if (current) current.add([seq, message]);
     else current = new OpenForm([[seq, message]], send, formDone);

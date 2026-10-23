@@ -2,6 +2,7 @@
 import { capitalise, h, icon, markdown } from "../dom";
 import type { Answer, Mood, Question } from "../types";
 import { type Field, field } from "./fields";
+import { visibility } from "./when";
 
 // A line under the title, and a class on the form that the CSS plays with.
 export const MOODS: Record<Mood, [face: string, text: string]> = {
@@ -98,13 +99,16 @@ export function buildForm(first: Question) {
     submitted ||= flag;
     const answer: Answer = { answers: {}, skipped: [], comments: {}, note: note.value.trim() };
     const problems: string[] = [];
+    const states = visibility(fields);
     for (const f of only) {
       const id = f.item.id;
-      if (f.comment.value.trim()) answer.comments[id] = f.comment.value.trim();
-      if (f.delegated()) {
-        answer.delegated = [...(answer.delegated ?? []), id];
+      const state = states.get(id);
+      if (state === "shown" && f.comment.value.trim()) answer.comments[id] = f.comment.value.trim();
+      if (state !== "shown" || f.delegated()) {
         f.element.classList.remove("invalid");
         f.error.textContent = "";
+        if (state === "hidden") answer.skipped.push(id);
+        else answer.delegated = [...(answer.delegated ?? []), id];
         continue;
       }
       const value = f.value();
@@ -123,9 +127,18 @@ export function buildForm(first: Question) {
     return { answer, problems };
   };
 
+  // A dependent left to the agent with its question is hidden too: nothing for the user to do there.
   const refresh = () => {
-    const answered = fields.filter((f) => f.delegated() || f.value() !== undefined).length;
-    progress.textContent = `${answered} of ${fields.length} answered`;
+    const states = visibility(fields);
+    const shown = fields.filter((f) => {
+      f.element.hidden = states.get(f.item.id) !== "shown";
+      return !f.element.hidden;
+    });
+    shown.forEach((f, i) => {
+      f.element.querySelector(".q-num")!.textContent = String(i + 1);
+    });
+    const answered = shown.filter((f) => f.delegated() || f.value() !== undefined).length;
+    progress.textContent = `${answered} of ${shown.length} answered`;
     if (submitted) collect(false);
   };
 

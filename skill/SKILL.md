@@ -114,6 +114,12 @@ and exits `0` at once. Use it for progress on long work between questions; keep 
 - `other: true` (single/multi) adds an "Other" option with a text box. The typed text comes back as a plain value
   (the string for `single`, one more item in the array for `multi`, counted toward `min`/`max`). A `default` that
   matches no option pre-fills the box.
+- `when: { "id": "env", "is": "prod" }` (any type) shows the question only while an earlier question in the same
+  form has that answer: `true`/`false` for a `confirm`, an option value for a `single`, and for a `multi`, an option
+  value it contains. One condition, no and/or. A hidden question is never required and comes back in `skipped`, as
+  does a dependent of a hidden or skipped question; if the user lets you decide the earlier question, its dependents
+  come back in `delegated` too. A `when` naming an unknown or later id, or an `is` that isn't one of its answers,
+  gets an `error` answer.
 - Prefer `confirm`/`single`/`multi` over `text`: they're quicker to answer on a phone.
 - Options are strings, or `{value, label?, md?}`.
 - `md` (markdown) works on the form, each question and each option: put the context, diffs and tables there so the

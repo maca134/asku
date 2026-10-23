@@ -1,11 +1,12 @@
 // Yes/No buttons on a notification: which batches get them, reading the batch, and the answer a button sends.
 import { type Keys, open } from "../../shared/crypto";
+import { conditionProblem } from "../form/when";
 import { question as validQuestion } from "../gen/validate.js";
 import type { Answer, ConfirmItem } from "../types";
 
 // A nervous agent wants the whole page looked at, not a tap on the lock screen.
 export function quickConfirm(message: unknown): ConfirmItem | null {
-  if (!validQuestion(message) || message.mood === "nervous") return null;
+  if (!validQuestion(message) || conditionProblem(message.questions) || message.mood === "nervous") return null;
   const [item, ...rest] = message.questions;
   return item.type === "confirm" && !rest.length ? item : null;
 }
