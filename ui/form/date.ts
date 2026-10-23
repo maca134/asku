@@ -2,6 +2,6 @@
 export function withOffset(local: string) {
   const minutes = -new Date(local).getTimezoneOffset();
   const abs = Math.abs(minutes);
-  const pad = (n: number) => String(n).padStart(2, "0");
+  const pad = (value: number) => String(value).padStart(2, "0");
   return `${local}${minutes < 0 ? "-" : "+"}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
 }

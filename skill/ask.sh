@@ -240,7 +240,7 @@ say() {
 # send [nowait]: waits for the bind (or checks it once), then sends the queued batches. Returns 1 if not bound yet.
 send() {
   [ -f "$S/sid" ] || die "no session; run: $0 ask <file>"
-  local sid n s pub k
+  local sid n s pub k said
   sid=$(state sid)
   DEADLINE=$((SECONDS + WAIT))
   if [ -n "${1:-}" ] && [ ! -f "$S/K" ]; then
@@ -268,14 +268,16 @@ send() {
   # Queue numbers can have gaps (a batch that timed out before it was sent); the relay needs seqs without any.
   for n in $(batches q); do
     s=$(( $(state seq 0) + 1 ))
+    said=
+    [[ $(head -c 7 "$S/q$n.json") != '{"say":' ]] || said=1
     BODY=$(seal "$(state K)" "$sid" q "$s" < "$S/q$n.json")
-    until req POST "/s/$sid/q" "$BODY"; do
+    until req POST "/s/$sid/q${said:+?push=0}" "$BODY"; do # push=0: a say, so no "new questions" notification
       [ $SECONDS -lt $DEADLINE ] || pending "Could not reach the relay at $BASE; questions are still queued."
       sleep 2
     done
     [ "$CODE" = 204 ] || [[ $CODE = 409 && $BODY == *duplicate* ]] || die "send failed ($CODE): $BODY" # duplicate: an earlier run sent it
     echo "$s" > "$S/seq"
-    if [[ $(head -c 7 "$S/q$n.json") == '{"say":' ]]; then rm "$S/q$n.json"; continue; fi
+    if [ -n "$said" ]; then rm "$S/q$n.json"; continue; fi
     mv "$S/q$n.json" "$S/o$s.json"
     [ ! -f "$S/d$n" ] || mv "$S/d$n" "$S/d$s"
   done

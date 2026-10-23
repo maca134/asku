@@ -2,6 +2,7 @@
 // bun run vectors
 import { createCipheriv, createECDH, createHash, createHmac } from "node:crypto";
 import question from "../examples/question.json";
+import type { Direction } from "../shared/crypto";
 
 const sha = (s: string | Buffer) => createHash("sha256").update(s).digest();
 const hmac = (k: Buffer, m: string | Buffer) => createHmac("sha256", k).update(m).digest();
@@ -20,7 +21,7 @@ const K = sha(Z);
 const kEnc = hmac(K, "enc");
 const kMac = hmac(K, "mac");
 
-const plaintexts: ["q" | "a" | "m", number, string][] = [
+const plaintexts: [Direction, number, string][] = [
   ["q", 1, JSON.stringify(question)],
   ["a", 1, JSON.stringify({ answers: { go: true }, skipped: [], comments: {}, note: "héllo — 日本語 🚀" })],
   ["q", 2, "0123456789abcdef0123456789abcdef"], // exact block multiple: full padding block

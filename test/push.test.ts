@@ -146,6 +146,20 @@ test("a new question pushes only its sid and seq, signed with the relay's VAPID 
   expect(exp * 1000).toBeGreaterThan(Date.now());
 });
 
+test("a status update posted with push=0 sends no push; the next question does", async () => {
+  const { vapid } = await vapidKeys();
+  const { call, session } = start({ vapid, pushServices: local });
+  const service = await pushService();
+  const { sid, agentKey, browserKey } = await session();
+  await call("PUT", `/s/${sid}/push`, service.subscription, browserKey);
+  expect((await call("POST", `/s/${sid}/q?push=0`, question(1), agentKey)).status).toBe(204);
+  expect((await call("POST", `/s/${sid}/q`, question(2), agentKey)).status).toBe(204);
+  const delivery = await service.next();
+  expect(JSON.parse(await service.decrypt(new Uint8Array(await delivery.arrayBuffer())))).toEqual({ sid, seq: 2 });
+  await Bun.sleep(50);
+  expect(service.pending()).toBe(0);
+});
+
 test("only the browser turns push on or off, and only towards a push service", async () => {
   const { vapid } = await vapidKeys();
   const { call, session } = start({ vapid });

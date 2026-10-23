@@ -46,24 +46,24 @@ function readPush(text = ""): Pushed | null {
   }
 }
 
-const keysOf = (state: State) => deriveKeys(state.priv, Uint8Array.fromBase64(state.agentPub!));
+const keysOf = (priv: CryptoKey, agentPub: string) => deriveKeys(priv, Uint8Array.fromBase64(agentPub));
 
 async function quickQuestion({ sid, seq }: Pushed, state: State) {
   if (!seq || !state.agentPub || state.answered.includes(seq)) return null;
-  const batch = await fetchBatch(worker.location.origin, sid, seq, await keysOf(state), AbortSignal.timeout(5000));
+  const keys = await keysOf(state.priv, state.agentPub);
+  const batch = await fetchBatch(worker.location.origin, sid, seq, keys, AbortSignal.timeout(5000));
   return quickConfirm(batch);
 }
 
-// ponytail: an agent's `say` update also counts as "new questions"; the relay can't tell them apart.
 async function notify(pushed: Pushed | null) {
   if (!pushed) return;
   const { sid, seq } = pushed;
   if ((await pagesOf(sid)).some((page) => page.visibilityState === "visible")) return;
   const state = await load(sid);
-  if (!state) return; // this browser no longer has the session
-  const item = await quickQuestion(pushed, state);
-  const title = state.name ? `New questions in ${state.name}` : "New questions";
   const options = { tag: sid, icon: "/apple-touch-icon.png" };
+  // userVisibleOnly: a push must show a notification, so a session this browser no longer has still gets a plain one
+  const item = state && (await quickQuestion(pushed, state));
+  const title = state?.name ? `New questions in ${state.name}` : "New questions";
   if (!item) return worker.registration.showNotification(title, { ...options, data: { sid } });
   const data: Quick = { sid, seq, id: item.id };
   // Platforms without notification actions (iOS) drop them: a tap then opens the page.
@@ -81,7 +81,7 @@ async function notify(pushed: Pushed | null) {
 async function answer({ sid, seq, id }: Quick, yes: boolean) {
   const state = await load(sid);
   if (!state?.agentPub) throw new Error("session gone");
-  await sendAnswer({ sid, keys: await keysOf(state), state }, [seq], confirmAnswer(seq, id, yes));
+  await sendAnswer({ sid, keys: await keysOf(state.priv, state.agentPub), state }, [seq], confirmAnswer(seq, id, yes));
   for (const page of await pagesOf(sid)) page.postMessage({ sid, answered: seq });
 }
 

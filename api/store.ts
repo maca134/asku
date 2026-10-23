@@ -1,7 +1,7 @@
 // The relay's SQLite tables: one row per session, one per stored envelope. Envelopes are opaque ciphertext.
 import { Database } from "bun:sqlite";
+import type { Direction } from "../shared/crypto";
 
-export type Direction = "q" | "a" | "m";
 export type Role = "agent" | "browser";
 
 // role and creatorPub: the side that made the session. joinerPub and bindTag: the side that joined it.
@@ -24,10 +24,9 @@ export function openStore(path: string) {
   db.run(`create table if not exists sessions (
     sid text primary key, role text not null, creatorPub text not null, joinerPub text, bindTag text,
     agentKeyHash text, browserKeyHash text, bytes integer not null default 0, touched integer not null, push text)`);
-  // databases from before push notifications: add the column, or fail because it is already there
-  try {
+  // databases from before push notifications
+  if (!db.query("select 1 from pragma_table_info('sessions') where name = 'push'").get())
     db.run("alter table sessions add column push text");
-  } catch {}
   db.run(`create table if not exists messages (
     sid text not null, direction text not null, seq integer not null, envelope text not null,
     primary key (sid, direction, seq)) without rowid`);

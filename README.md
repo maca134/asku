@@ -143,14 +143,14 @@ POST bodies must be `application/json`. Writes take `Authorization: Bearer <key>
 | joiner | `GET /s/:sid` | `{pub, role, bound}`: the creator's pub and role |
 | joiner | `POST /s/:sid/bind {pub, mac}` | `201 {key}`: the write key for the other role. `409` if already bound |
 | creator | `GET /s/:sid/bind` | long-poll: `{pub, mac}` once bound, else `204` after 25s |
-| agent | `POST /s/:sid/q` envelope, agent key | `204`; `seq` must be last q + 1, else `409` |
+| agent | `POST /s/:sid/q[?push=0]` envelope, agent key | `204`; `seq` must be last q + 1, else `409`. `push=0` marks a `say` update: no push for it |
 | agent | `GET /s/:sid/a?after=n&m=k` | long-poll: `[envelope…]`, answers with seq > n and, with `m`, messages with seq > k; else `204` after 25s |
 | agent | `GET /s/:sid/m?after=k` | `[envelope…]`, the messages with seq > k, at once (maybe `[]`) |
 | agent | `DELETE /s/:sid`, agent key | `204`, session purged |
 | browser | `GET /s/:sid/q?after=n` | SSE: `event: q` with `id: seq`, data = envelope; `event: close` on purge. Resumes from `Last-Event-ID` |
 | browser | `POST /s/:sid/a` envelope, browser key | `204`; `seq` must match an asked q not yet answered, or be `0` (once) in a browser-created session, else `409` |
 | browser | `POST /s/:sid/m` envelope, browser key | `204`; `seq` must be last m + 1, else `409` |
-| browser | `PUT /s/:sid/push` a `PushSubscription`, browser key | `204`: each new q sends a Web Push to it. `404` when push is off |
+| browser | `PUT /s/:sid/push` a `PushSubscription`, browser key | `204`: each new q, except a `push=0` one, sends a Web Push to it. `404` when push is off |
 | browser | `DELETE /s/:sid/push`, browser key | `204`, no more pushes for this session |
 
 Errors are `{error}` with `400 401 404 405 409 413 429`. The relay stores only sha256 of write keys.

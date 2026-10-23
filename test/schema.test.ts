@@ -4,10 +4,15 @@ import answer from "../examples/answer.json";
 import question from "../examples/question.json";
 import schema from "../schema.json";
 
-const ajv = new Ajv({ allErrors: true, allowUnionTypes: true, $data: true });
+const ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
 ajv.addSchema(schema);
 const valid = (def: string, x: unknown) => ajv.validate(`${schema.$id}#/$defs/${def}`, x);
 const q = (item: object) => ({ questions: [{ id: "x", label: "L", ...item }] });
+
+test("the schema is plain JSON Schema 2020-12, no validator extensions", () => {
+  expect(JSON.stringify(schema)).not.toContain("$data");
+  expect(ajv.validateSchema(schema)).toBe(true);
+});
 
 test("examples are valid", () => {
   expect(valid("question", question)).toBe(true);
@@ -27,14 +32,14 @@ test("bad shapes are rejected", () => {
   expect(valid("say", { say: "hi", questions: [] })).toBe(false);
 });
 
-test("say progress: 0 <= done <= total, total >= 1", () => {
+// done <= total is checked by the clients and the page; the schema can't compare two fields.
+test("say progress: done >= 0, total >= 1", () => {
   const progress = (done: number, total: number) => valid("say", { say: "Tests", progress: { done, total } });
   expect(progress(42, 50)).toBe(true);
   expect(progress(0, 1)).toBe(true);
   expect(progress(50, 50)).toBe(true);
   expect(progress(-1, 50)).toBe(false);
   expect(progress(0, 0)).toBe(false);
-  expect(progress(51, 50)).toBe(false);
   expect(progress(1.5, 50)).toBe(false);
   expect(valid("say", { say: "Tests", progress: { done: 1 } })).toBe(false);
 });

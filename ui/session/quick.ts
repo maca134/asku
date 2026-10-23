@@ -20,7 +20,11 @@ export const confirmAnswer = (seq: number, id: string, yes: boolean): Answer => 
   note: "",
 });
 
-export const choice = (action: string) => (action === "yes" ? true : action === "no" ? false : null);
+export function choice(action: string) {
+  if (action === "yes") return true;
+  if (action === "no") return false;
+  return null;
+}
 
 // The first event of the question feed from just before seq: that batch, decrypted, or null.
 export async function fetchBatch(origin: string, sid: string, seq: number, keys: Keys, signal?: AbortSignal) {

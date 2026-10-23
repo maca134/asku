@@ -53,6 +53,7 @@ Exit codes, check every time:
 - `1`: error on stderr, with the command to run next where there is one.
 - `3`: the user pressed **STOP**. Stdout has a `{"stop":true}` line (and anything else the call returned). Stop your
   work at once: start nothing new, and ask the user in your own chat, or with one `ask ask`, how to go on.
+  A STOP is reported once, by that one call; the next call does not exit `3` again. Act on it then, never later.
 
 **Messages from the user.** The user can write to you from the page at any time, outside any form. `ask`, `add`,
 `say` and `wait` print each new message first on stdout, one JSON line each, before their usual output:

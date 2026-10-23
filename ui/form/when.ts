@@ -26,7 +26,7 @@ export function conditionProblem(questions: Item[]) {
 // In order, so a dependent sees its target's state: hidden hides it, delegated delegates it.
 export function visibility(fields: Answerable[]) {
   const states = new Map<string, Visibility>();
-  const byId = new Map(fields.map((f) => [f.item.id, f]));
+  const byId = new Map(fields.map((field) => [field.item.id, field]));
   for (const { item } of fields) {
     const target = item.when && byId.get(item.when.id);
     if (!item.when || !target) {
@@ -40,5 +40,8 @@ export function visibility(fields: Answerable[]) {
   }
   return states;
 }
+
+export const countShown = (fields: Answerable[]) =>
+  [...visibility(fields).values()].filter((state) => state === "shown").length;
 
 const matches = (value: unknown, is: string | boolean) => (Array.isArray(value) ? value.includes(is) : value === is);

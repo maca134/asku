@@ -63,7 +63,7 @@ function body(p: Page) {
 }
 
 async function build() {
-  const ajv = new Ajv({ code: { source: true, esm: true }, allErrors: true, allowUnionTypes: true, $data: true });
+  const ajv = new Ajv({ code: { source: true, esm: true }, allErrors: true, allowUnionTypes: true });
   ajv.addSchema(schema);
   await Bun.write(
     "ui/gen/validate.js",
