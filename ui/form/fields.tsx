@@ -38,9 +38,40 @@ function confirmControl(item: ConfirmItem, name: string): Control {
 const option = (choice: Option) =>
   typeof choice === "string" ? { value: choice, label: choice } : { ...choice, label: choice.label ?? choice.value };
 
+// A write-in: an "Other" pick plus a text box. Typing ticks it; ticked with an empty box counts as no answer.
+function otherChoice(multi: boolean, name: string, prefill?: string) {
+  const pick = h("input", {
+    type: multi ? "checkbox" : "radio",
+    name,
+    value: "",
+    checked: !!prefill,
+    className: "pick",
+  });
+  const text = h("input", {
+    type: "text",
+    value: prefill ?? "",
+    placeholder: "Write your own",
+    className: "input",
+    ariaLabel: "Other answer",
+  });
+  text.oninput = () => {
+    if (text.value.trim()) pick.checked = true;
+  };
+  const label = (
+    <label className="opt">
+      {pick}
+      <span className="opt-body">
+        <span className="opt-label">Other</span>
+      </span>
+    </label>
+  );
+  return { elements: [label, text], written: () => (pick.checked ? text.value.trim() : "") };
+}
+
 function choiceControl(item: SingleItem | MultiItem, name: string): Control {
   const multi = item.type === "multi";
   const defaults = new Set(multi ? item.default : item.default !== undefined ? [item.default] : []);
+  const values = new Set(item.options.map((choice) => option(choice).value));
   const choices = item.options.map(option).map(({ value, label, md }) => {
     const input = h("input", {
       type: multi ? "checkbox" : "radio",
@@ -60,8 +91,19 @@ function choiceControl(item: SingleItem | MultiItem, name: string): Control {
     );
     return { input, element };
   });
-  const picked = () => choices.filter(({ input }) => input.checked).map(({ input }) => input.value);
-  const options = <div className="opts">{choices.map(({ element }) => element)}</div>;
+  const prefill = [...defaults].find((value) => !values.has(value));
+  const other = item.other ? otherChoice(multi, name, prefill) : null;
+  const picked = () => {
+    const ticked = choices.filter(({ input }) => input.checked).map(({ input }) => input.value);
+    const written = other?.written();
+    return [...new Set(written ? [...ticked, written] : ticked)];
+  };
+  const options = (
+    <div className="opts">
+      {choices.map(({ element }) => element)}
+      {other?.elements}
+    </div>
+  );
   if (!multi) return { elements: [options], value: () => picked()[0] };
 
   const { min, max } = item;

@@ -27,6 +27,15 @@ test("bad shapes are rejected", () => {
   expect(valid("say", { say: "hi", questions: [] })).toBe(false);
 });
 
+test("other: a write-in on single and multi only", () => {
+  expect(valid("question", q({ type: "single", options: ["a"], other: true, default: "typed" }))).toBe(true);
+  expect(valid("question", q({ type: "multi", options: ["a"], other: true, default: ["a", "typed"] }))).toBe(true);
+  expect(valid("question", q({ type: "single", options: ["a"], other: "yes" }))).toBe(false);
+  expect(valid("question", q({ type: "text", other: true }))).toBe(false);
+  expect(valid("question", q({ type: "confirm", other: true }))).toBe(false);
+  expect(valid("question", q({ type: "number", other: true }))).toBe(false);
+});
+
 test("deadline, mood, say and delegated", () => {
   expect(
     valid("question", {
