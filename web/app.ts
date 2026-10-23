@@ -521,6 +521,18 @@ function landing() {
         p("Then point your agent at `/skill.md` for the commands and the question format.", "fine"))),
     next("Start from the website", "/start")));
 
+  const stage = h("div", {}, demo(CLIS[0]));
+  const tabs = CLIS.map((c) => h("button", { type: "button", className: "btn btn-secondary", textContent: c.name, ariaPressed: String(c === CLIS[0]) }));
+  tabs.forEach((t, i) => t.onclick = () => {
+    tabs.forEach((x) => { x.ariaPressed = String(x === t); });
+    stage.replaceChildren(demo(CLIS[i]));
+  });
+  const demos = h("section", { className: "sec" }, h("div", { className: "wrap" },
+    head("Demo", "/demo"),
+    h("div", { className: "clis", role: "group", ariaLabel: "Agent" }, ...tabs),
+    stage,
+    next("Install the skill", "/install")));
+
   const start = h("section", { className: "sec" }, h("div", { className: "wrap narrow" },
     head("Start here", "/start"),
     startCard()));
@@ -562,7 +574,7 @@ function landing() {
       h("a", { href: "/terms", textContent: "Terms" }))));
 
   const missing = h("section", { className: "sec" }, h("div", { className: "wrap narrow" }, stateEl("error", "Page not found", "There's nothing at this address."), next("Go home", "/")));
-  const body = { "/": [hero], "/how": [how, controls, faq], "/security": [security], "/install": [install], "/start": [start], "/terms": [terms] }[path] ?? [missing];
+  const body = { "/": [hero], "/how": [how, controls, faq], "/security": [security], "/demo": [demos], "/install": [install], "/start": [start], "/terms": [terms] }[path] ?? [missing];
   document.title = PAGES[path]?.title ?? "Not found · asku";
   app.replaceChildren(header, h("main", { className: "landing" }, ...body), footer);
 }
@@ -758,8 +770,20 @@ function showcase() {
       h("div", { className: "term-body" }, out)));
 }
 
+// How each agent CLI draws its chat (approximated with text and colours, no logos).
+type Cli = { id: string; name: string; title: string; say: string; tool: string; run: (c: string) => string };
+const SHELL: Cli = { id: "shell", name: "An agent", title: "agent — ~/shop", say: "● ", tool: "$ ", run: (c) => c };
+const CLIS: Cli[] = [
+  { id: "claude", name: "Claude Code", title: "claude — ~/shop", say: "● ", tool: "● ", run: (c) => `Bash(${c})` },
+  { id: "codex", name: "Codex CLI", title: "codex — ~/shop", say: "• ", tool: "• ", run: (c) => `Ran ${c}` },
+  { id: "gemini", name: "Gemini CLI", title: "gemini — ~/shop", say: "✦ ", tool: "✔ ", run: (c) => `Shell ${c}` },
+];
+const NOTIFY: Question = { title: "Afterwards", questions: [{ id: "notify", type: "confirm", label: "Post in #releases when it's live?" }] };
+
 // Animated centrepiece: the agent asks in a terminal, the phone answers, the JSON comes back. Loops.
-function demo() {
+// The CLI demos also append a question with `ask add` while the form is open.
+function demo(cli = SHELL) {
+  const more = cli !== SHELL;
   const term = h("div", { className: "term-body" });
   const url = h("span", { className: "url-text" });
   const scroller = h("div", { className: "screen-scroll" });
@@ -773,14 +797,14 @@ function demo() {
   toggle.onclick = () => { paused = !paused; setToggle(); };
   setToggle();
 
-  const root = h("figure", { className: "demo" },
+  const root = h("figure", { className: `demo cli-${cli.id}` },
     h("div", { className: "demo-stage", ariaHidden: "true", inert: true },
       h("div", { className: "term" },
-        h("div", { className: "term-bar" }, h("span", { className: "dots" }), h("span", { className: "term-title", textContent: "agent — ~/shop" })),
+        h("div", { className: "term-bar" }, h("span", { className: "dots" }), h("span", { className: "term-title", textContent: cli.title })),
         term),
       phone(url, scroller, tap)),
     h("figcaption", { className: "demo-cap" },
-      h("span", {}, "An agent asks for sign-off with ", h("code", { textContent: "ask.sh" }), ", you answer on your phone, it gets JSON back."),
+      h("span", {}, `${cli.name} asks for sign-off with `, h("code", { textContent: "ask.sh" }), ", you answer on your phone, it gets JSON back."),
       still ? null : toggle));
 
   new IntersectionObserver(([e]) => { visible = e.isIntersecting; }).observe(root);
@@ -804,11 +828,24 @@ function demo() {
     const type = async (el: HTMLElement | HTMLTextAreaElement, text: string, cps = 28) => {
       const isField = el instanceof HTMLTextAreaElement;
       for (const ch of fast ? [text] : text) {
-        if (isField) { el.value += ch; el.dispatchEvent(new Event("input", { bubbles: true })); } else el.textContent += ch;
+        if (isField) { el.value += ch; el.dispatchEvent(new Event("input", { bubbles: true })); } else el.append(ch); // keeps the prefix span
         term.scrollTop = term.scrollHeight;
         await wait((1000 / cps) * (0.6 + Math.random() * 0.8));
       }
     };
+    // A command and its output, grouped so each CLI can frame them its own way.
+    const run = async (c: string) => {
+      const g = h("div", { className: "tool" }, h("div", { className: "tl cmd" }, h("span", { className: "t-dim tool-mark", textContent: cli.tool })));
+      term.append(g);
+      await type(g.firstChild as HTMLElement, cli.run(c), more ? 70 : 22);
+      return (cls: string, ...kids: Kid[]) => {
+        const l = h("div", { className: `tl out ${cls}` }, ...kids);
+        g.append(l);
+        term.scrollTop = term.scrollHeight;
+        return l;
+      };
+    };
+    const say = (...kids: Kid[]) => line("agent", h("span", { className: "t-accent", textContent: cli.say }), ...kids);
     const box = scroller.getBoundingClientRect.bind(scroller);
     const show = async (el: HTMLElement) => {
       const r = el.getBoundingClientRect(), s = box();
@@ -852,27 +889,41 @@ function demo() {
     const you = line("prompt", h("span", { className: "t-dim", textContent: "› " }));
     await type(you, "Ship v2.3 once I've signed off. I'm heading out, ask me on my phone.");
     await wait(500);
-    line("agent", h("span", { className: "t-accent", textContent: "● " }), "I'll send you the deploy plan to approve.");
+    say("I'll send you the deploy plan to approve.");
     await wait(600);
-    const cmd = line("cmd", h("span", { className: "t-dim", textContent: "$ " }));
-    await type(cmd, "bash ask.sh ask deploy.json", 22);
+    let out = await run("bash ask.sh ask deploy.json");
     await wait(500);
-    line("out", h("span", { className: "t-warn", textContent: "PENDING" }));
-    line("out", "Give the user this link: ", h("span", { className: "t-link", textContent: `https://${DEMO_URL}#9f2c…e1a0` }));
-    line("out t-dim", "Run again to keep waiting: ask.sh wait");
+    out("", h("span", { className: "t-warn", textContent: "PENDING" }));
+    out("", "Give the user this link: ", h("span", { className: "t-link", textContent: `https://${DEMO_URL}#9f2c…e1a0` }));
+    out("t-dim", "Run again to keep waiting: ask.sh wait");
     await wait(700);
-    const w = line("cmd", h("span", { className: "t-dim", textContent: "$ " }));
-    await type(w, "bash ask.sh wait", 22);
-    const spin = line("out t-dim", h("span", { className: "tspin" }), " waiting for your answer…");
 
     // the phone opens the link
-    await wait(300);
-    for (const ch of fast ? [DEMO_URL] : DEMO_URL.match(/.{1,4}/g)!) { url.textContent += ch; await wait(35); }
-    scroller.replaceChildren(shell([stateEl("wait", "Verifying link…", "Checking the agent's key against the link.")], "div"));
-    await wait(1100);
-    scroller.replaceChildren(shell([f.form], "div"));
-    f.form.classList.add("enter");
-    await wait(1100);
+    const openLink = async () => {
+      await wait(300);
+      for (const ch of fast ? [DEMO_URL] : DEMO_URL.match(/.{1,4}/g)!) { url.textContent += ch; await wait(35); }
+      scroller.replaceChildren(shell([stateEl("wait", "Verifying link…", "Checking the agent's key against the link.")], "div"));
+      await wait(1100);
+      scroller.replaceChildren(shell([f.form], "div"));
+      f.form.classList.add("enter");
+      await wait(1100);
+    };
+    if (more) {
+      say("Open this on your phone to sign off: ", h("span", { className: "t-link", textContent: `https://${DEMO_URL}#9f2c…e1a0` }));
+      await openLink();
+      say("One more thing while you're in there.");
+      await wait(500);
+      out = await run("bash ask.sh add notify.json");
+      await wait(400);
+      f.append(NOTIFY);
+      out("", h("span", { className: "t-warn", textContent: "PENDING" }));
+      out("", "Sent. Add more with add, or run wait for the answer.");
+      out("t-dim", "Run again to keep waiting: ask.sh wait");
+      await wait(700);
+    }
+    out = await run("bash ask.sh wait");
+    const spin = out("t-dim", h("span", { className: "tspin" }), " waiting for your answer…");
+    if (!more) await openLink();
 
     await pick($("go", "input[value=yes]"));
     await pick($("env", "input[value=prod]"));
@@ -884,6 +935,7 @@ function demo() {
     await press(det.querySelector("summary")!, () => { det.open = true; });
     await type(F.pct.comment, "Keep it low on Fridays", 16);
     await wait(500);
+    if (more) await pick(f.fields.at(-1)!.el.querySelector("input[value=yes]")!);
     const answer = f.collect(false).a;
     if (fast) { scroller.scrollTop = 0; } else {
       await press(f.btn, () => { f.label.textContent = "Sending…"; f.btn.classList.add("busy"); });
@@ -893,14 +945,13 @@ function demo() {
 
     // the agent gets the JSON and carries on
     spin.remove();
-    line("out json", ...jsonNodes(answer));
+    out("json", ...jsonNodes(answer));
     await wait(1200);
-    line("agent", h("span", { className: "t-accent", textContent: "● " }), "Approved: Production, 25% canary, after lint and test. You noted Fridays, so I'll hold it at 25%.");
+    say(`Approved: Production, 25% canary, after lint and test. You noted Fridays, so I'll hold it at 25%${more ? " and post in #releases" : ""}.`);
     await wait(800);
-    const dep = line("cmd", h("span", { className: "t-dim", textContent: "$ " }));
-    await type(dep, "./deploy.sh v2.3 --env prod --canary 25", 24);
+    out = await run("./deploy.sh v2.3 --env prod --canary 25");
     await wait(900);
-    line("out", h("span", { className: "t-ok", textContent: "✓ " }), "v2.3 is live on 25% of production traffic");
+    out("", h("span", { className: "t-ok", textContent: "✓ " }), "v2.3 is live on 25% of production traffic");
     await wait(5000);
   }
 

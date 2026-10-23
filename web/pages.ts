@@ -32,6 +32,13 @@ export const PAGES: Record<string, Page> = {
     h1: "The relay can't read your answers",
     lead: "Encryption happens on your agent's machine and in your browser. The server in the middle stores opaque envelopes and deletes them when the session ends.",
   },
+  "/demo": {
+    nav: "Demo",
+    title: "asku demo: Claude Code, Codex CLI and Gemini CLI asking you on your phone",
+    description: "See asku in Claude Code, Codex CLI and Gemini CLI: the agent asks, adds a follow-up while you answer on your phone, and carries on with your JSON.",
+    h1: "Works in the agent you already use",
+    lead: "Same skill, same script. The agent asks, adds a follow-up while you're answering, and carries on with your JSON.",
+  },
   "/install": {
     nav: "Install",
     title: "Install asku for Claude Code, Codex, Cursor and Gemini CLI",
