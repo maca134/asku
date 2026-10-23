@@ -9,7 +9,8 @@
       "preset": "recommended",
       "style": { "noNonNullAssertion": "off", "noDescendingSpecificity": "off" },
       "complexity": { "noImportantStyles": "off" },
-      "suspicious": { "noDuplicateProperties": "off" }
+      "suspicious": { "noDuplicateProperties": "off" },
+      "a11y": { "noLabelWithoutControl": "off", "useSemanticElements": "off" }
     }
   },
   "assist": { "actions": { "source": { "organizeImports": "on" } } }

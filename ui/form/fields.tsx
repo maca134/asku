@@ -1,0 +1,237 @@
+// One question: its control, a comment box and "Let the agent decide".
+import { type Child, capitalise, h, icon, markdown } from "../dom";
+import type { ConfirmItem, Item, MultiItem, NumberItem, Option, SingleItem, TextItem } from "../types";
+
+type Control = { elements: Child[]; value: () => unknown; check?: () => string | null };
+
+const hint = (text: string) => (text ? <p className="hint">{capitalise(text)}</p> : null);
+
+function yesNo(name: string, value: "yes" | "no", checked: boolean) {
+  const input = h("input", { type: "radio", name, value, checked, className: "sr-only" });
+  const label = (
+    <label className={`yn yn-${value}`}>
+      {input}
+      {icon(value === "yes" ? "check" : "x")}
+      <span>{value === "yes" ? "Yes" : "No"}</span>
+    </label>
+  );
+  return { input, label };
+}
+
+function confirmControl(item: ConfirmItem, name: string): Control {
+  const yes = yesNo(name, "yes", item.default === true);
+  const no = yesNo(name, "no", item.default === false);
+  return {
+    elements: [
+      <div className="seg">
+        {yes.label}
+        {no.label}
+      </div>,
+    ],
+    value: () => {
+      if (yes.input.checked) return true;
+      if (no.input.checked) return false;
+    },
+  };
+}
+
+const option = (choice: Option) =>
+  typeof choice === "string" ? { value: choice, label: choice } : { ...choice, label: choice.label ?? choice.value };
+
+function choiceControl(item: SingleItem | MultiItem, name: string): Control {
+  const multi = item.type === "multi";
+  const defaults = new Set(multi ? item.default : item.default !== undefined ? [item.default] : []);
+  const choices = item.options.map(option).map(({ value, label, md }) => {
+    const input = h("input", {
+      type: multi ? "checkbox" : "radio",
+      name,
+      value,
+      checked: defaults.has(value),
+      className: "pick",
+    });
+    const element = (
+      <label className="opt">
+        {input}
+        <span className="opt-body">
+          <span className="opt-label">{label}</span>
+          {md && markdown(md)}
+        </span>
+      </label>
+    );
+    return { input, element };
+  });
+  const picked = () => choices.filter(({ input }) => input.checked).map(({ input }) => input.value);
+  const options = <div className="opts">{choices.map(({ element }) => element)}</div>;
+  if (!multi) return { elements: [options], value: () => picked()[0] };
+
+  const { min, max } = item;
+  const limits = [min !== undefined && min > 1 && `pick at least ${min}`, max !== undefined && `at most ${max}`];
+  return {
+    elements: [options, hint(limits.filter(Boolean).join(", "))],
+    value: () => (picked().length ? picked() : undefined),
+    check: () => {
+      const count = picked().length;
+      if (count && min !== undefined && count < min) return `pick at least ${min}`;
+      if (max !== undefined && count > max) return `pick at most ${max}`;
+      return null;
+    },
+  };
+}
+
+function textControl(item: TextItem): Control {
+  const props = {
+    placeholder: item.placeholder ?? "",
+    value: item.default ?? "",
+    className: "input",
+    ariaLabel: item.label,
+  };
+  const input = item.multiline ? h("textarea", { rows: 4, ...props }) : h("input", { type: "text", ...props });
+  if (item.maxLength) input.maxLength = item.maxLength;
+  return { elements: [input], value: () => (input.value.trim() ? input.value : undefined) };
+}
+
+function bounds(min?: number, max?: number) {
+  if (min !== undefined && max !== undefined) return `${min} to ${max}`;
+  if (min !== undefined) return `at least ${min}`;
+  if (max !== undefined) return `at most ${max}`;
+  return "";
+}
+
+function numberControl(item: NumberItem): Control {
+  const { min, max, step } = item;
+  const input = h("input", {
+    type: "number",
+    // iOS's decimal keypad has no minus key
+    inputMode: min !== undefined && min >= 0 ? "decimal" : "text",
+    className: "input",
+    ariaLabel: item.label,
+    value: item.default !== undefined ? String(item.default) : "",
+  });
+  if (min !== undefined) input.min = String(min);
+  if (max !== undefined) input.max = String(max);
+  input.step = step !== undefined ? String(step) : "any";
+
+  const bump = (direction: 1 | -1) => {
+    const current = input.value === "" ? (item.default ?? min ?? 0) : input.valueAsNumber;
+    const next = Math.min(max ?? Infinity, Math.max(min ?? -Infinity, current + direction * (step ?? 1)));
+    input.value = String(Math.round(next * 1e9) / 1e9);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const stepButton = (direction: 1 | -1) => (
+    <button
+      type="button"
+      className={`stepbtn ${direction > 0 ? "step-up" : "step-down"}`}
+      ariaLabel={direction > 0 ? "Increase" : "Decrease"}
+      onclick={() => bump(direction)}
+    >
+      {icon(direction > 0 ? "plus" : "minus")}
+    </button>
+  );
+  const range = [bounds(min, max), step !== undefined ? `step ${step}` : ""].filter(Boolean).join(" · ");
+  return {
+    elements: [
+      <div className="stepper">
+        {stepButton(-1)}
+        {input}
+        {stepButton(1)}
+      </div>,
+      hint(range),
+    ],
+    value: () => (input.value === "" ? undefined : input.valueAsNumber),
+    check: () => (input.validity.valid ? null : input.validationMessage || "not a valid number"),
+  };
+}
+
+function control(item: Item, name: string) {
+  switch (item.type) {
+    case "confirm":
+      return confirmControl(item, name);
+    case "single":
+    case "multi":
+      return choiceControl(item, name);
+    case "text":
+      return textControl(item);
+    case "number":
+      return numberControl(item);
+  }
+}
+
+const LOCKABLE = ".opts input, .seg input, .stepper input, .stepper button, :scope > .input, :scope > .clear";
+
+export type Field = ReturnType<typeof field>;
+
+export function field(item: Item, index: number) {
+  const { elements, value, check = () => null } = control(item, `f-${item.id}`);
+  const box = (
+    <fieldset className={`q q-${item.type}`}>
+      <legend>
+        <span className="q-num" ariaHidden="true">
+          {index + 1}
+        </span>
+        <span className="q-label">{item.label}</span>
+        {item.required && <span className="req">Required</span>}
+      </legend>
+      {item.md && markdown(item.md, "q-md")}
+      {elements}
+    </fieldset>
+  );
+
+  // a radio can't be unticked: optional ones get a way back to "skipped"
+  if (!item.required && (item.type === "confirm" || item.type === "single")) {
+    const clear = () => {
+      for (const input of box.querySelectorAll<HTMLInputElement>("input:checked")) input.checked = false;
+      box.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    box.append(
+      <button type="button" className="clear" onclick={clear}>
+        Clear answer
+      </button>,
+    );
+  }
+
+  const error = <p className="q-err" id={`q-err-${item.id}`} />;
+  for (const input of box.querySelectorAll("input, textarea")) input.setAttribute("aria-describedby", error.id);
+
+  const delegateLabel = <span>Let the agent decide</span>;
+  const delegate = (
+    <button type="button" className="dice" ariaPressed="false">
+      {icon("dice")}
+      {delegateLabel}
+    </button>
+  );
+  delegate.onclick = () => {
+    const on = box.classList.toggle("delegated");
+    delegate.ariaPressed = String(on);
+    delegateLabel.textContent = on ? "The agent decides · undo" : "Let the agent decide";
+    for (const input of box.querySelectorAll<HTMLInputElement | HTMLButtonElement>(LOCKABLE)) input.disabled = on;
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  const comment = h("textarea", {
+    rows: 2,
+    className: "input",
+    placeholder: "Comment for the agent",
+    ariaLabel: `Comment on “${item.label}”`,
+  });
+  const commentLabel = <span>Add a comment</span>;
+  const details = h(
+    "details",
+    { className: "comment" },
+    <summary>
+      {icon("message")}
+      {commentLabel}
+    </summary>,
+    comment,
+  );
+  details.ontoggle = () => {
+    if (details.open) comment.focus();
+  };
+  comment.oninput = () => {
+    const added = !!comment.value.trim();
+    commentLabel.textContent = added ? "Comment added" : "Add a comment";
+    details.classList.toggle("has", added);
+  };
+
+  box.append(error, delegate, details);
+  return { item, element: box, value, check, comment, error, delegated: () => box.classList.contains("delegated") };
+}

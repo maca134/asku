@@ -2,26 +2,18 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 
-export type Kid = Node | string | null | undefined | false;
+export { type Child, h } from "./jsx-runtime";
 
 export const app = document.getElementById("app")!;
-export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export function h<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  props: Partial<NoInfer<HTMLElementTagNameMap[K]>> = {},
-  ...kids: Kid[]
-): HTMLElementTagNameMap[K] {
-  const el = Object.assign(document.createElement(tag), props);
-  el.append(...kids.filter((k): k is Node | string => k != null && k !== false));
-  return el;
-}
+export const capitalise = (text: string) => text[0].toUpperCase() + text.slice(1);
 
 // `code` spans in plain strings become <code>.
-export const rich = (s: string) => s.split(/`([^`]+)`/).map((p, i) => (i % 2 ? h("code", { textContent: p }) : p));
-export const p = (s: string, className = "") => h("p", { className }, ...rich(s));
+export const codeSpans = (text: string) =>
+  text.split(/`([^`]+)`/).map((part, i) => (i % 2 ? <code>{part}</code> : part));
 
-// ---- icons: inline SVG, stroked with currentColor (no style attributes, so the CSP is happy)
+// inline SVG, stroked with currentColor (no style attributes, so the CSP is happy)
 const ICONS: Record<string, string> = {
   lock: '<rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
@@ -53,25 +45,34 @@ const ICONS: Record<string, string> = {
   github:
     '<path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>',
 };
-export function icon(name: string, cls = "") {
-  const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  s.setAttribute("viewBox", name === "github" ? "0 0 16 16" : "0 0 24 24");
-  s.setAttribute("aria-hidden", "true");
-  s.setAttribute("class", `icon ${name === "github" ? "icon-fill" : ""} ${cls}`);
-  s.innerHTML = ICONS[name];
-  return s;
+
+export function icon(name: string, className = "") {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const github = name === "github";
+  svg.setAttribute("viewBox", github ? "0 0 16 16" : "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", `icon ${github ? "icon-fill" : ""} ${className}`);
+  svg.innerHTML = ICONS[name];
+  return svg;
 }
-// a terminal prompt: › asku▊
-export const logo = (href?: string) => {
-  const kids = [
-    h("span", { className: "logo-prompt", ariaHidden: "true", textContent: "›" }),
-    h("span", { className: "wordmark", textContent: "asku" }),
-    h("i", { className: "logo-caret", ariaHidden: "true" }),
+
+// › asku▊
+export function logo(href?: string) {
+  const parts = [
+    <span className="logo-prompt" ariaHidden="true">
+      ›
+    </span>,
+    <span className="wordmark">asku</span>,
+    <i className="logo-caret" ariaHidden="true" />,
   ];
-  return href
-    ? h("a", { className: "logo", href, ariaLabel: "asku home" }, ...kids)
-    : h("span", { className: "logo" }, ...kids);
-};
+  return href ? (
+    <a className="logo" href={href} ariaLabel="asku home">
+      {parts}
+    </a>
+  ) : (
+    <span className="logo">{parts}</span>
+  );
+}
 
 DOMPurify.addHook("afterSanitizeAttributes", (node) => {
   if (node.tagName === "A") {
@@ -81,8 +82,9 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
 });
 // markdown can't draw controls of its own, so the agent's text can't pose as a field of the form
 const NO_CONTROLS = { FORBID_TAGS: ["form", "input", "button", "textarea", "select", "option"] };
-export function md(src: string, extra = "") {
-  const div = h("div", { className: `md ${extra}` });
-  div.innerHTML = DOMPurify.sanitize(marked.parse(src, { async: false }) as string, NO_CONTROLS);
+
+export function markdown(source: string, className = "") {
+  const div = <div className={`md ${className}`} />;
+  div.innerHTML = DOMPurify.sanitize(marked.parse(source, { async: false }) as string, NO_CONTROLS);
   return div;
 }

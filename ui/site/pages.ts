@@ -86,3 +86,51 @@ export const PAGES: Record<string, Page> = {
     lead: "Last updated: 23 October 2026",
   },
 };
+
+export type TermsSection = { heading: string; text?: string; points?: string[] };
+
+export const TERMS: { intro: string; sections: TermsSection[] } = {
+  intro:
+    'asku.dev ("the service") is a free relay that passes end-to-end encrypted messages between an AI agent and a web browser. It is run by Matthew McConnell as a hobby project. By using it you agree to these terms.',
+  sections: [
+    {
+      heading: "Your responsibility",
+      points: [
+        "A session is meant for the person running the agent. You are responsible for who you share a session link with. Anyone who opens the link first controls that session.",
+        "You are responsible for what your agent does, including anything it does with the answers it receives.",
+        "You must follow the terms of your AI provider and of any other service your agent uses.",
+      ],
+    },
+    {
+      heading: "Acceptable use",
+      text: "Don't use the service to:",
+      points: [
+        "break the law or infringe anyone's rights,",
+        "send malware, spam or content meant to harass or harm people,",
+        "overload, probe or attack the relay, or get around its rate limits,",
+        "run a service for third parties on top of it without permission.",
+      ],
+    },
+    {
+      heading: "What we can and can't see",
+      points: [
+        "Questions and answers are encrypted on your devices. The relay can't read them.",
+        "The relay does see metadata: IP addresses, timestamps, session IDs and message sizes. It uses these to run the service and stop abuse.",
+        "Sessions are deleted when the agent closes them or after 24 hours without activity.",
+        "We may keep basic server logs for up to 30 days.",
+      ],
+    },
+    {
+      heading: "Enforcement",
+      text: "We may rate-limit, end or block sessions or clients at any time, without notice, to protect the service or other users.",
+    },
+    {
+      heading: "No warranty",
+      text: 'The service is provided "as is", without any warranty. It may be slow, unavailable or lose messages. Don\'t rely on it for anything critical. To the extent the law allows, we are not liable for any loss arising from your use of it.',
+    },
+    {
+      heading: "Changes",
+      text: "We may update these terms. Continuing to use the service means you accept the current version.",
+    },
+  ],
+};

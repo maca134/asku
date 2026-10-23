@@ -1,10 +1,11 @@
 // Builds the browser app into dist/: hashed assets with SRI, and a schema validator compiled at
 // build time (Ajv's runtime codegen needs eval, which the CSP forbids).
 // --watch: rebuild on ui/ changes, reload open pages, and run the relay, restarting it on api/ or shared/ changes.
-import Ajv from "ajv/dist/2020";
-import standalone from "ajv/dist/standalone";
+
 import { watch } from "node:fs";
 import { cp, rm } from "node:fs/promises";
+import Ajv from "ajv/dist/2020";
+import standalone from "ajv/dist/standalone";
 import schema from "./schema.json";
 import { ORIGIN, PAGES, type Page } from "./ui/site/pages";
 
@@ -68,10 +69,19 @@ async function build() {
     "ui/gen/validate.js",
     standalone(ajv, { question: `${schema.$id}#/$defs/question`, say: `${schema.$id}#/$defs/say` }),
   );
+  await Bun.write(
+    "ui/gen/validate.d.ts",
+    `import type { ErrorObject } from "ajv";
+import type { Question, Say } from "../types";
+type Validator<T> = ((data: unknown) => data is T) & { errors?: ErrorObject[] | null };
+export const question: Validator<Question>;
+export const say: Validator<Say>;
+`,
+  );
 
   await rm("dist", { recursive: true, force: true });
   const out = await Bun.build({
-    entrypoints: ["ui/app.ts"],
+    entrypoints: ["ui/app.tsx"],
     outdir: "dist/assets",
     naming: { entry: "[name]-[hash].[ext]", asset: "[name]-[hash].[ext]", chunk: "[name]-[hash].[ext]" },
     minify: true,

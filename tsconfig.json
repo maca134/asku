@@ -11,7 +11,13 @@
     "noFallthroughCasesInSwitch": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "asku-jsx",
+    "paths": {
+      "asku-jsx/jsx-runtime": ["./ui/jsx-runtime.ts"],
+      "asku-jsx/jsx-dev-runtime": ["./ui/jsx-runtime.ts"]
+    }
   },
   "include": ["api", "shared", "ui", "test", "build.ts"]
 }
