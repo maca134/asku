@@ -14,7 +14,7 @@ import type {
 } from "../types";
 import { withOffset } from "./date";
 
-type Control = { elements: Child[]; value: () => unknown; check?: () => string | null };
+type Control = { elements: Child[]; value: () => unknown; check?: () => string | null; reset?: () => void };
 
 const hint = (text: string) => (text ? <p className="hint">{capitalise(text)}</p> : null);
 
@@ -302,6 +302,42 @@ function numberControl(item: NumberItem): Control {
   };
 }
 
+// A native range: "not set" (skipped) until moved, unless there is a default. The schema requires min and max.
+function sliderControl(item: NumberItem): Control {
+  const input = h("input", { type: "range", ariaLabel: item.label });
+  const { min = 0, max = 100 } = item;
+  input.min = String(min);
+  input.max = String(max);
+  if (item.step !== undefined) input.step = String(item.step);
+  input.value = String(item.default ?? (min + max) / 2);
+  const shown = <output className="range-value" ariaHidden="true" />;
+  const slider = (
+    <div className="slider">
+      {input}
+      {shown}
+    </div>
+  );
+  let moved = item.default !== undefined;
+  const show = () => {
+    shown.textContent = moved ? input.value : "Not set";
+    input.ariaValueText = moved ? input.value : "not set";
+    slider.classList.toggle("set", moved);
+  };
+  input.addEventListener("input", () => {
+    moved = true;
+    show();
+  });
+  show();
+  return {
+    elements: [slider],
+    value: () => (moved ? input.valueAsNumber : undefined),
+    reset: () => {
+      moved = false;
+      show();
+    },
+  };
+}
+
 // The native picker. With time, the answer carries the phone's UTC offset on the picked day.
 function dateControl(item: DateItem): Control {
   const { min, max, time } = item;
@@ -334,19 +370,19 @@ function control(item: Item, name: string) {
     case "text":
       return textControl(item);
     case "number":
-      return numberControl(item);
+      return item.display === "slider" ? sliderControl(item) : numberControl(item);
     case "date":
       return dateControl(item);
   }
 }
 
 const LOCKABLE =
-  ".opts input, .opts button, .seg input, .stepper input, .stepper button, :scope > .input, :scope > .clear";
+  ".opts input, .opts button, .seg input, .stepper input, .stepper button, .slider input, :scope > .input, :scope > .clear";
 
 export type Field = ReturnType<typeof field>;
 
 export function field(item: Item, index: number) {
-  const { elements, value, check = () => null } = control(item, `f-${item.id}`);
+  const { elements, value, check = () => null, reset } = control(item, `f-${item.id}`);
   const box = (
     <fieldset className={`q q-${item.type}`}>
       <legend>
@@ -361,10 +397,11 @@ export function field(item: Item, index: number) {
     </fieldset>
   );
 
-  // a radio can't be unticked: optional ones get a way back to "skipped"
-  if (!item.required && (item.type === "confirm" || item.type === "single" || item.type === "review")) {
+  // a radio or a moved slider can't be unset: optional ones get a way back to "skipped"
+  if (!item.required && (item.type === "confirm" || item.type === "single" || item.type === "review" || reset)) {
     const clear = () => {
       for (const input of box.querySelectorAll<HTMLInputElement>("input:checked")) input.checked = false;
+      reset?.();
       box.dispatchEvent(new Event("change", { bubbles: true }));
     };
     box.append(

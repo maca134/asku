@@ -106,7 +106,9 @@ and exits `0` at once. Use it for progress on long work between questions; keep 
   - `rank`: put the options in order with up/down buttons. `options` required, listed in the starting order; no
     `default`, no top-N. Skipped until the user moves an item or confirms the order as it is.
   - `text`: `default`, `placeholder`, `multiline`, `maxLength`.
-  - `number`: `default`, `min`, `max`, `step`.
+  - `number`: `default`, `min`, `max`, `step`, `display` (`"stepper"`, the default, or `"slider"`). A slider needs
+    both `min` and `max`, moves in steps of 1 unless `step` is set, and counts as skipped until the user moves it,
+    unless it has a `default`. Either way the answer is a number.
   - `date`: the phone's native date picker. `time: true` adds a time (there is no time-only mode). `default`, `min`,
     `max` are `YYYY-MM-DD`, or `YYYY-MM-DDTHH:mm` with `time: true`, with no offset: read as the user's local time.
 - `other: true` (single/multi) adds an "Other" option with a text box. The typed text comes back as a plain value

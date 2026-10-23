@@ -1615,7 +1615,8 @@ fieldset.q legend + * {
 }
 .q:has(:checked) .q-num,
 .q-text:has(.input:not(:placeholder-shown)) .q-num,
-.q-number:has(.input:valid:not(:placeholder-shown)) .q-num {
+.q-number:has(.input:valid:not(:placeholder-shown)) .q-num,
+.q-number:has(.slider.set) .q-num {
   background: var(--accent-soft);
   color: var(--accent-text);
 }
@@ -1943,6 +1944,34 @@ fieldset.q.invalid .q-num {
   stroke-width: 2.2;
 }
 
+.slider {
+  display: flex;
+  align-items: center;
+  gap: 0.75em;
+}
+.slider input {
+  flex: 1;
+  min-width: 0;
+  height: 2.75em;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.slider:not(.set) input {
+  accent-color: var(--faint);
+}
+.range-value {
+  flex: none;
+  min-width: 4em;
+  text-align: right;
+  font-size: 1.15em;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+.slider.set .range-value {
+  color: var(--fg);
+}
+
 details.comment {
   margin-top: 0.7em;
 }
@@ -1986,10 +2015,10 @@ details.comment.has summary {
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
-.q:has(input:checked) > .clear {
+.q:has(input:checked, .slider.set) > .clear {
   display: inline-block;
 }
-.q:has(input:checked) > .clear ~ .dice {
+.q:has(input:checked, .slider.set) > .clear ~ .dice {
   margin-left: 0.6em;
 } /* same row as Clear answer: don't pull over it */
 html:has(.qform) {
@@ -2037,7 +2066,7 @@ details.comment textarea {
 .dice + details.comment {
   margin-top: 0;
 }
-.q.delegated > :is(.opts, .seg, .stepper, .input, .hint) {
+.q.delegated > :is(.opts, .seg, .stepper, .slider, .input, .hint) {
   opacity: 0.35;
   pointer-events: none;
 }
