@@ -3,7 +3,7 @@
 # ponytail: LibreSSL (macOS /usr/bin/openssl) lacks `dgst -macopt hexkey`; hand-rolled HMAC if macOS agents matter.
 set -euo pipefail
 
-VERSION=1.0.0 # keep in step with ask.ps1
+VERSION=1.1.0 # keep in step with ask.ps1
 
 SPKI_P256=3059301306072a8648ce3d020106082a8648ce3d030107034200
 
@@ -122,19 +122,47 @@ join() {
   save_session "$sid" "$(printf %s "$BODY" | jget key)"
   derive "$S/a.pem" "$pub" > "$S/K"
   echo 0 > "$S/seq"
-  echo -1 > "$S/answered" # the opening note arrives as answer 0
+  printf '{"questions":[]}' > "$S/o0.json" # the opening note arrives as answer 0
 }
 
 link() { printf '%s/a/%s#%s' "$BASE" "$(state sid)" "$(fragment "$(state pub)" "$(state T)")"; }
 gone() { rm -rf "$S"; die "session expired or closed"; }
 
-# Waits for the bind, sends the pending question, waits for its answer and prints it.
-resume() {
+# The open form is a list of batches: q<seq>.json are queued (not sent yet), o<seq>.json are sent and unanswered.
+batches() { local f; for f in "$S/$1"*.json; do [ -e "$f" ] || continue; f=${f##*/"$1"}; echo "${f%.json}"; done | sort -n; }
+# ponytail: grep, not a JSON parser; `"id":"` can't match inside a JSON string, whose quotes are escaped
+ids() { grep -o '"id"[[:space:]]*:[[:space:]]*"[A-Za-z0-9_-]*"' "$1" | sed 's/.*"\([^"]*\)"$/\1/' || true; }
+
+# add <file | ->: queues a batch onto the open form. The 50-question limit and unique ids span the whole form.
+add() {
+  local f=${1:--} new open dup k n seq
+  if [ "$f" = - ]; then TMPQ=$(mktemp); trap 'rm -f "$TMPQ"' EXIT; cat > "$TMPQ"; f=$TMPQ; fi
+  [ -f "$f" ] || die "$CMD needs a questions.json file"
+  new=$(ids "$f")
+  # ponytail: counts batches the user may have just submitted (we can't know yet); a false refusal only costs a rename
+  open=$(for k in q o; do for n in $(batches $k); do ids "$S/$k$n.json"; done; done)
+  dup=; [ -z "$open" ] || [ -z "$new" ] || dup=$(printf '%s\n' "$new" | grep -Fx -f <(printf '%s\n' "$open") || true)
+  [ -z "$dup" ] || die "ids already in the open form: $(echo $dup | tr ' ' ',')"
+  n=$(printf '%s\n%s\n' "$new" "$open" | grep -c . || true)
+  [ "$n" -le 50 ] || die "the open form would have $n questions, the limit is 50"
+  start
+  seq=$(state seq 0); for n in $(batches q); do [ "$n" -le "$seq" ] || seq=$n; done
+  cp "$f" "$S/q$((seq + 1)).json"
+}
+
+# send [nowait]: waits for the bind (or checks it once), then sends the queued batches. Returns 1 if not bound yet.
+send() {
   [ -f "$S/sid" ] || die "no session; run: $0 ask <file>"
-  local sid seq pub deadline=$((SECONDS + WAIT))
+  local sid n pub
   sid=$(state sid)
+  DEADLINE=$((SECONDS + WAIT))
+  if [ -n "${1:-}" ] && [ ! -f "$S/K" ]; then
+    req GET "/s/$sid" || return 1 # GET bind would hold for the long-poll
+    [ "$CODE" != 404 ] || gone
+    [ "$CODE" = 200 ] && [[ $BODY == *'"bound":true'* ]] || return 1
+  fi
   while [ ! -f "$S/K" ]; do
-    [ $SECONDS -lt $deadline ] || pending "The user has not opened the link yet. Give them: $(link)"
+    [ $SECONDS -lt $DEADLINE ] || pending "The user has not opened the link yet. Give them: $(link)"
     req GET "/s/$sid/bind" || { sleep 2; continue; }
     case $CODE in
       200) pub=$(printf %s "$BODY" | jget pub)
@@ -148,25 +176,46 @@ resume() {
       *) die "bind poll failed ($CODE): $BODY" ;;
     esac
   done
-  seq=$(state seq 0)
-  if [ -f "$S/pending" ]; then
-    seq=$((seq + 1))
-    BODY=$(seal "$(state K)" "$sid" q "$seq" < "$S/pending")
+  for n in $(batches q); do
+    BODY=$(seal "$(state K)" "$sid" q "$n" < "$S/q$n.json")
     until req POST "/s/$sid/q" "$BODY"; do sleep 2; done
     [ "$CODE" = 204 ] || [ "$CODE" = 409 ] || die "send failed ($CODE): $BODY" # 409: an earlier run already sent it
-    echo "$seq" > "$S/seq"
-    rm "$S/pending"
-  fi
-  [ "$seq" != "$(state answered 0)" ] || die "no question pending; run: $0 ask <file>"
+    echo "$n" > "$S/seq"
+    mv "$S/q$n.json" "$S/o$n.json"
+  done
+}
+
+# Waits for the next answer to an open batch and prints it. One submit answers every batch up to its seq;
+# an error answers just its own (the page dropped that batch and kept the rest open).
+answer() {
+  send
+  local sid after list nl e env seq text err n left
+  sid=$(state sid)
+  [ -n "$(batches o)" ] || die "no question pending; run: $0 ask <file>"
+  # From the oldest open batch, not a cursor: an error for batch 3 can land before the answer to batch 2.
+  after=$(( $(batches o | head -n1) - 1 ))
   while :; do
-    [ $SECONDS -lt $deadline ] || pending "The user has not answered yet."
-    req GET "/s/$sid/a?after=$((seq - 1))" || { sleep 2; continue; }
+    [ $SECONDS -lt $DEADLINE ] || pending "The user has not answered yet."
+    req GET "/s/$sid/a?after=$after" || { sleep 2; continue; }
     case $CODE in
-      200) open "$(state K)" "$sid" a "$seq" "$(printf %s "$BODY" | jget iv)" "$(printf %s "$BODY" | jget ct)" \
-             "$(printf %s "$BODY" | jget tag)" || die "answer failed verification"
-           echo
-           echo "$seq" > "$S/answered"
-           return ;;
+      200) list=${BODY#[}; list=${list%]}; nl=$'}\n{'; env=
+           # flat envelopes in seq order, one per line: take the first for a batch still open
+           while IFS= read -r e; do
+             after=$(printf %s "$e" | jget seq)
+             if [ -f "$S/o$after.json" ]; then env=$e; break; fi
+           done <<< "${list//\},\{/$nl}"
+           [ -n "$env" ] || continue # all already handled
+           seq=$after
+           text=$(open "$(state K)" "$sid" a "$seq" "$(printf %s "$env" | jget iv)" "$(printf %s "$env" | jget ct)" \
+             "$(printf %s "$env" | jget tag)") || die "answer failed verification"
+           err=; [[ $text != *'"error":"invalid question'* ]] || err=1 # only the page writes that, and only as a key
+           for n in $(batches o); do
+             if [ "$n" = "$seq" ] || { [ -z "$err" ] && [ "$n" -lt "$seq" ]; }; then rm "$S/o$n.json"; fi
+           done
+           printf '%s\n' "$text"
+           left=$(batches o | grep -c . || true)
+           [ "$left" = 0 ] || echo "asku: $left batch(es) still pending; run: $0 wait" >&2
+           exit 0 ;;
       204) ;;
       404) gone ;;
       *) die "answer poll failed ($CODE): $BODY" ;;
@@ -174,16 +223,22 @@ resume() {
   done
 }
 
-case "${1:-}" in
+CMD=${1:-}
+case "$CMD" in
   ask)
-    [ ! -f "$S/pending" ] && [ "$(state seq 0)" = "$(state answered 0)" ] || die "a question is still pending; run: $0 wait"
+    [ -z "$(batches q)$(batches o)" ] || die "a form is open; run: $0 add <file> to append, or $0 wait"
     fresh=; [ -f "$S/sid" ] || fresh=1
-    start
-    cat "${2:--}" > "$S/pending"
+    add "${2:--}"
     [ -z "$fresh" ] || pending "Give the user this link: $(link)"
-    resume ;;
-  join) join "${2:-}"; resume ;;
-  wait) resume ;;
+    answer ;;
+  add)
+    fresh=; [ -f "$S/sid" ] || fresh=1
+    add "${2:--}"
+    [ -z "$fresh" ] || pending "Give the user this link: $(link)"
+    send nowait || pending "Queued. The user has not opened the link yet. Give them: $(link)"
+    pending "Sent. Add more with add, or run wait for the answer." ;;
+  join) join "${2:-}"; answer ;;
+  wait) answer ;;
   version) echo "$VERSION" ;;
   close)
     if [ -f "$S/sid" ]; then req DELETE "/s/$(state sid)" || true; fi
@@ -191,6 +246,7 @@ case "${1:-}" in
   *)
     cat >&2 <<USAGE
 usage: $0 ask <questions.json | ->   send a question, print the answer JSON
+       $0 add <questions.json | ->   append questions to the open form without waiting
        $0 join <agent link>          join a session the user started, print their opening note
        $0 wait                       keep waiting after PENDING
        $0 close                      end the session

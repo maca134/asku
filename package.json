@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "bun build.ts",
-    "dev": "bun run build && bun src/relay.ts",
+    "dev": "bun build.ts --watch",
     "start": "bun src/relay.ts",
     "test": "bun test",
     "vectors": "bun test/gen-vectors.ts > test/vectors.json"

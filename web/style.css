@@ -337,6 +337,15 @@ textarea.input { resize: vertical; line-height: 1.45; }
 
 .qform-head { padding: .6em .1em 1.1em; }
 .qform-head h1 { margin: 0 0 .55em; font-size: 1.65em; line-height: 1.15; letter-spacing: -.03em; font-weight: 740; text-wrap: balance; }
+.qform-sec { padding: 1.4em .1em .9em; scroll-margin-top: 1em; }
+.qform-sec h2 { margin: 0 0 .5em; font-size: 1.25em; line-height: 1.2; letter-spacing: -.02em; font-weight: 720; text-wrap: balance; }
+.new-chip {
+  position: fixed; z-index: 3; left: 50%; bottom: calc(5.6em + env(safe-area-inset-bottom)); translate: -50% 0;
+  display: inline-flex; align-items: center; gap: .45em; padding: .55em 1em .55em .85em; font: inherit; font-size: .86em; font-weight: 640;
+  color: #fff; background: var(--accent); border: 0; border-radius: 999px; box-shadow: var(--shadow-sm); cursor: pointer; animation: rise .3s ease-out;
+}
+.new-chip .icon { width: 1.05em; height: 1.05em; stroke-width: 2.4; }
+.new-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .context { padding: .8em 1em; color: var(--fg-2); font-size: .95em; background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: .7em; }
 
 fieldset.q, .q.note {
@@ -443,6 +452,7 @@ details.comment textarea { margin-top: .45em; font-size: .95em; }
 .live { display: inline-flex; align-items: center; gap: .6em; margin: 0 0 1.5em; padding: .45em .95em .45em .8em; font-size: .86em; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; }
 .pulse { flex: none; width: .55em; height: .55em; border-radius: 50%; background: var(--ok); animation: pulse 1.8s ease-out infinite; }
 .state .copy, .panel .copy { width: 100%; margin: 0 0 1.25em; text-align: left; }
+.state-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .6em; }
 .tip { width: 100%; margin-top: .5em; padding-top: 1.4em; text-align: left; border-top: 1px solid var(--line); }
 
 .md { overflow-wrap: anywhere; }

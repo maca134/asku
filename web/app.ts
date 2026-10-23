@@ -41,6 +41,7 @@ const ICONS: Record<string, string> = {
   alert: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/>',
   copy: '<rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2.5"/><path d="M15.5 8.5V6A2 2 0 0 0 13.5 4H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5"/>',
   arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
   terminal: '<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15H17"/>',
   phone: '<rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
   link: '<path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/>',
@@ -83,7 +84,7 @@ function md(src: string, extra = "") {
 // ---- app pages: a slim top bar and one centred column, built for phones
 function shell(kids: Kid[], tag: "main" | "div" = "main") {
   return h("div", { className: "shell" },
-    h("header", { className: "topbar" }, logo(), h("span", { className: "e2e" }, icon("lock"), "End-to-end encrypted")),
+    h("header", { className: "topbar" }, logo("/"), h("span", { className: "e2e" }, icon("lock"), "End-to-end encrypted")),
     h(tag, { className: "shell-main" }, ...kids));
 }
 
@@ -220,18 +221,29 @@ function field(it: Item, i: number) {
 
 // The answer form, shared by the real page and the landing demos.
 function buildForm(q: Question) {
-  const fields = q.questions.map(field);
+  const fields: ReturnType<typeof field>[] = [];
   const note = h("textarea", { rows: 3, className: "input", placeholder: "Anything else the agent should know?" });
   const err = h("div", { className: "form-err", role: "alert" });
   const label = h("span", { textContent: "Send answers" });
   const btn = h("button", { type: "submit", className: "btn btn-primary btn-send" }, icon("lock"), label);
   const progress = h("span", { className: "progress", ariaLive: "polite" });
+  const tail = h("label", { className: "q note" }, h("span", { className: "note-label" }, "Note for the agent", h("span", { className: "opt-tag", textContent: "Optional" })), note);
   const form = h("form", { className: "qform", noValidate: true },
     q.title || q.md ? h("header", { className: "qform-head" }, q.title ? h("h1", { textContent: q.title }) : null, q.md ? md(q.md, "context") : null) : null,
-    ...fields.map((f) => f.el),
-    h("label", { className: "q note" }, h("span", { className: "note-label" }, "Note for the agent", h("span", { className: "opt-tag", textContent: "Optional" })), note),
+    tail,
     err,
     h("div", { className: "submit-bar" }, progress, btn));
+
+  // Adds a batch's questions above the note, numbered on from the last; later batches get their title/md as a section head.
+  const append = (b: Question, head = true) => {
+    const fs = b.questions.map((it, i) => field(it, fields.length + i));
+    fields.push(...fs);
+    const sec = head && (b.title || b.md) ? h("header", { className: "qform-sec" }, b.title ? h("h2", { textContent: b.title }) : null, b.md ? md(b.md, "context") : null) : null;
+    const els = [sec, ...fs.map((f) => f.el)].filter((e) => e !== null);
+    tail.before(...els);
+    refresh();
+    return els[0];
+  };
 
   let tried = false;
   // mark: flag problems on the fields (after the first submit, flags then follow every edit)
@@ -259,22 +271,50 @@ function buildForm(q: Question) {
   };
   form.addEventListener("input", refresh);
   form.addEventListener("change", refresh);
-  refresh();
-  return { form, fields, note, err, btn, label, collect };
+  append(q, false);
+  return { form, fields, note, err, btn, label, collect, append };
 }
 
 // ---- session
-async function send(sid: string, keys: Keys, st: State, seq: number, a: Answer | { note: string }) {
-  const res = await post(`/s/${sid}/a`, await seal(keys, sid, "a", seq, JSON.stringify(a)), st.key);
+// One answer covers every batch in `seqs`: it goes under the newest one, and the agent reads it as answering all of them.
+async function send(sid: string, keys: Keys, st: State, seqs: number[], a: Answer | { note: string }) {
+  const res = await post(`/s/${sid}/a`, await seal(keys, sid, "a", Math.max(...seqs), JSON.stringify(a)), st.key);
   if (res.status !== 204 && res.status !== 409) throw new Error(`relay said ${res.status}`); // 409: already answered
-  st.answered.push(seq);
+  st.answered.push(...seqs);
   await save(sid, st);
 }
 
 const sentState = () => stateEl("done", "Answers sent", "Encrypted on this device and delivered to your agent.", live("Waiting for the agent's next question…"));
 
-function render(sid: string, keys: Keys, st: State, seq: number, q: Question) {
+type Batch = [seq: number, q: Question];
+type Open = { f: ReturnType<typeof buildForm>; seqs: number[]; sending: boolean; add: (b: Batch) => void };
+
+// Shows a form for one or more batches. Batches added later go under it, with a chip pointing at them.
+function render(sid: string, keys: Keys, st: State, batches: Batch[], done: () => void): Open {
+  const [[seq, q], ...rest] = batches;
   const f = buildForm(q);
+  const born = Date.now();
+  let unseen = 0, first: Element | undefined;
+  const chip = h("button", { type: "button", className: "new-chip", onclick: () => first?.scrollIntoView({ behavior: "smooth", block: "start" }) });
+  const seen = new IntersectionObserver((es) => {
+    if (!es.some((x) => x.isIntersecting)) return;
+    chip.remove(); unseen = 0; first = undefined; seen.disconnect();
+  });
+  const o: Open = {
+    f, seqs: [seq], sending: false,
+    add([s, b]) {
+      o.seqs.push(s);
+      const el = f.append(b);
+      if (Date.now() - born < 1000 || !el) return; // replayed after a reload, not new
+      unseen += b.questions.length;
+      first ??= el;
+      chip.replaceChildren(icon("down"), `${unseen} new question${unseen === 1 ? "" : "s"} below`);
+      if (!chip.isConnected) f.form.append(chip);
+      seen.observe(el);
+      if (document.hidden) document.title = "● asku: new questions";
+    },
+  };
+  rest.forEach(o.add);
   f.form.onsubmit = async (e) => {
     e.preventDefault();
     const { a, problems } = f.collect();
@@ -282,20 +322,26 @@ function render(sid: string, keys: Keys, st: State, seq: number, q: Question) {
       f.form.querySelector(".invalid")?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
+    o.sending = true;
     f.btn.disabled = true;
     f.label.textContent = "Sending…";
     try {
-      await send(sid, keys, st, seq, a);
+      await send(sid, keys, st, o.seqs, a);
+      seen.disconnect();
       app.replaceChildren(shell([sentState()]));
+      done();
     } catch (x) {
+      o.sending = false;
       f.err.textContent = `Not sent: ${(x as Error).message}. Try again.`;
       f.btn.disabled = false;
       f.label.textContent = "Send answers";
+      done();
     }
   };
   app.replaceChildren(shell([f.form]));
   scrollTo(0, 0);
   if (document.hidden) document.title = "● asku: question waiting";
+  return o;
 }
 
 document.addEventListener("visibilitychange", () => { if (!document.hidden) document.title = "asku"; });
@@ -452,7 +498,7 @@ async function waitForAgent(sid: string, st: State) {
         return status("error", "This session is not safe", "Something other than your agent used the link. Start a new one.", home());
       }
       const keys = await deriveKeys(st.priv, Uint8Array.fromBase64(pub));
-      await send(sid, keys, st, 0, { note: st.note ?? "" }); // the opening note is answer 0
+      await send(sid, keys, st, [0], { note: st.note ?? "" }); // the opening note is answer 0
       const joined: State = { priv: st.priv, key: st.key, answered: st.answered, pubA: pub };
       await save(sid, joined);
       return listen(sid, keys, joined);
@@ -464,26 +510,47 @@ async function waitForAgent(sid: string, st: State) {
 function listen(sid: string, keys: Keys, st: State) {
   status("wait", "Connected", "Waiting for the agent's question. This page updates by itself, keep it open.");
   const es = new EventSource(`/s/${sid}/q`);
-  es.addEventListener("q", async (e) => {
-    const seq = Number(e.lastEventId);
+  let cur: Open | null = null;
+  let later: Batch[] = []; // arrived while an answer was being sent: they open the next form
+  const done = () => {
+    if (cur?.sending === false) { later.forEach(cur.add); later = []; return; } // the send failed, the form is still open
+    cur = null;
+    if (later.length) { const b = later; later = []; cur = render(sid, keys, st, b, done); }
+  };
+  // Why a batch can't join the open form. The agent client checks the same, this only guards the merged answer.
+  const clash = (f: Open["f"], q: Question) => {
+    const have = new Set(f.fields.map((x) => x.it.id));
+    const dup = q.questions.filter((x) => have.has(x.id)).map((x) => x.id);
+    return dup.length ? `ids already in the open form: ${dup.join(", ")}` : f.fields.length + q.questions.length > 50 ? "the open form would have more than 50 questions" : null;
+  };
+  const onQ = async (seq: number, data: string) => {
     if (st.answered.includes(seq)) return;
     let q: Question;
     try {
-      q = JSON.parse(await open(keys, sid, "q", seq, JSON.parse(e.data)));
+      q = JSON.parse(await open(keys, sid, "q", seq, JSON.parse(data)));
     } catch {
       return status("error", "A message failed verification", "It was ignored. If this repeats, ask the agent for a new link.");
     }
-    if (!validQuestion(q)) {
-      const detail = (validQuestion as any).errors?.map((x: any) => `${x.instancePath || "/"} ${x.message}`).join("; ");
-      await send(sid, keys, st, seq, { answers: {}, skipped: [], comments: {}, note: "", error: `invalid question: ${detail}`.slice(0, 2000) }).catch(() => {});
+    const target = cur && !cur.sending ? cur : null;
+    const problem = !validQuestion(q) ? (validQuestion as any).errors?.map((x: any) => `${x.instancePath || "/"} ${x.message}`).join("; ") ?? "invalid"
+      : target ? clash(target.f, q) : null;
+    if (problem) {
+      // the batch is dropped; an open form stays as it is
+      await send(sid, keys, st, [seq], { answers: {}, skipped: [], comments: {}, note: "", error: `invalid question: ${problem}`.slice(0, 2000) }).catch(() => {});
+      if (cur) return;
       return status("error", "This question can't be shown", "The agent sent a form this page doesn't understand. It has been told; wait for a corrected one.", live("Waiting for the agent…"));
     }
-    render(sid, keys, st, seq, q);
-  });
+    if (cur?.sending) later.push([seq, q]);
+    else if (cur) cur.add([seq, q]);
+    else cur = render(sid, keys, st, [[seq, q]], done);
+  };
+  let chain = Promise.resolve(); // decrypt is async: keep batches in order
+  es.addEventListener("q", (e) => { chain = chain.then(() => onQ(Number(e.lastEventId), e.data)).catch(console.error); });
   es.addEventListener("close", () => {
     es.close();
     drop(sid);
-    status("done", "Session ended", "The agent closed this session and the relay deleted it. You can close this tab.");
+    status("done", "Session ended", "The agent closed this session and the relay deleted it. You can close this tab.",
+      h("div", { className: "state-actions" }, h("a", { className: "btn btn-primary", href: "/#start" }, "Start a new session"), home()));
   });
   es.onerror = () => {
     if (es.readyState === EventSource.CLOSED) status("error", "This session has ended or expired", undefined, home());

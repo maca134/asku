@@ -137,6 +137,65 @@ for (const c of clients) {
     expect(existsSync(`${home}/t`)).toBe(false);
   }, 120_000);
 
+  test.skipIf(!c.on)(`${c.name} appends batches to the open form`, async () => {
+    const { home, run } = agent(c.cmd, { ASKU_URL: base, ASKU_SESSION: "t", ASKU_WAIT: "30" });
+    const batch = (name: string, ...ids: string[]) => {
+      writeFileSync(`${home}/${name}.json`, JSON.stringify({ questions: ids.map((id) => ({ id, type: "text", label: id })) }));
+      return `${home}/${name}.json`;
+    };
+    const ok = (answers: Record<string, unknown>) => ({ answers, skipped: [], comments: {}, note: "" });
+
+    // queued before the user opens the link; the form's ids and size are checked across batches
+    let res = await run(["add", batch("b1", "a")]);
+    expect(res.code).toBe(2);
+    const link = res.out.match(/https?:\/\/\S+#[0-9a-f]{64}\.[0-9a-f]{32}/)![0];
+    expect((await run(["add", batch("b2", "b")])).out).toContain("Queued");
+    res = await run(["add", batch("dup", "a")]);
+    expect(res.code).toBe(1);
+    expect(res.err).toContain("already in the open form");
+    expect((await run(["add", batch("big", ...Array.from({ length: 49 }, (_, i) => `x${i}`))])).code).toBe(1);
+    expect((await run(["ask", batch("b9", "z")])).code).toBe(1); // a form is open
+
+    // bound: add sends everything queued, one submit answers all of it
+    const b = await browser(link);
+    res = await run(["add", batch("b3", "c")]);
+    expect(res.code).toBe(2);
+    expect(res.out).toContain("Sent");
+    for (const [seq, id] of [[1, "a"], [2, "b"], [3, "c"]] as const) expect((await b.question(seq)).questions[0].id).toBe(id);
+    await b.answer(3, ok({ a: "1", b: "2", c: "3" }));
+    res = await run(["wait"]);
+    expect(res.err).toBe("");
+    expect(res.code).toBe(0);
+    expect(JSON.parse(res.out)).toEqual(ok({ a: "1", b: "2", c: "3" }));
+
+    // the race: the user submits batch 4 just before batch 5 arrives
+    await run(["add", batch("b4", "d")]);
+    await b.answer(4, ok({ d: "4" }));
+    await run(["add", batch("b5", "e")]);
+    res = await run(["wait"]);
+    expect(JSON.parse(res.out)).toEqual(ok({ d: "4" }));
+    expect(res.err).toContain("1 batch(es) still pending");
+    await b.answer(5, ok({ e: "5" }));
+    res = await run(["wait"]);
+    expect(JSON.parse(res.out)).toEqual(ok({ e: "5" }));
+    expect(res.err).toBe("");
+
+    // an invalid batch is answered with an error on its own seq, and can land before the earlier batch's answer
+    await run(["add", batch("b6", "f")]);
+    await run(["add", batch("b7", "g")]);
+    const bad = { ...ok({}), error: "invalid question: /questions/0 nope" };
+    await b.answer(7, bad);
+    res = await run(["wait"]);
+    expect(JSON.parse(res.out)).toEqual(bad);
+    expect(res.err).toContain("1 batch(es) still pending");
+    await b.answer(6, ok({ f: "6" }));
+    res = await run(["wait"]);
+    expect(JSON.parse(res.out)).toEqual(ok({ f: "6" }));
+    expect((await run(["wait"])).code).toBe(1); // nothing open
+
+    expect((await run(["close"])).code).toBe(0);
+  }, 180_000);
+
   test.skipIf(!c.on)(`${c.name} rejects a binding without the token`, async () => {
     const { home, run } = agent(c.cmd, { ASKU_URL: base, ASKU_WAIT: "5" });
     const link = (await run(["ask", `${home}/q.json`])).out.match(/https?:\/\/\S+#\S+/)![0];

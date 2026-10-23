@@ -33,6 +33,7 @@ Below, `ask` means whichever script you use.
 | Command | Does |
 |---|---|
 | `ask ask <file.json>` | Send a question form (`-` reads stdin, `ask.sh` only) |
+| `ask add <file.json>` | Append questions to the open form (or open one) without waiting |
 | `ask join <link>` | Join a session the user started on asku.dev; returns their opening note |
 | `ask wait` | Keep waiting for the answer after `PENDING` |
 | `ask close` | End the session and purge it from the relay |
@@ -51,6 +52,12 @@ Each call returns within ~9 minutes so it fits a tool timeout; `PENDING` just me
 2. Run `ask wait` until it exits `0`.
 3. Ask follow-ups with more `ask ask` calls in the same session, one form at a time: the next `ask` is refused until the last one is answered.
 4. Run `ask close` when done.
+
+**Appending.** To send questions as you think of them, use `ask add` instead of `ask ask`: each batch goes to the bottom
+of the form the user has open and `add` returns at once (exit `2`; the first one prints the link). Run `ask wait` when you
+need the answers: one submit returns one answer covering every batch. Ids must be unique across the open form, and
+it holds 50 questions at most (`add` refuses otherwise). If `wait` says on stderr that batches are still pending,
+the user submitted before they arrived: they are now the next form, so run `wait` again.
 
 If the user pastes a link like `https://asku.dev/j/<id>#…`, run `ask join '<link>'` (quote it, it has a `#`) instead of step 1. It prints `{"note": "…"}`, the user's opening message. Then continue from step 3.
 
@@ -99,7 +106,7 @@ Sessions are named by `ASKU_SESSION` (default `default`). Use a different name t
 - `skipped`: optional questions the user left blank.
 - `comments`: free text the user attached to a question. Read them, they often change the answer.
 - `note`: free text for the whole form.
-- `error`: present instead if the browser rejected your form as invalid. Fix it and `ask` again.
+- `error`: present instead if the browser rejected your form as invalid. Fix it and `ask` again. For an appended batch, only that batch was dropped: fix it and `add` it again.
 
 ## Tips
 
