@@ -82,14 +82,18 @@ function Get-AskuFragment([byte[]]$PubA, [byte[]]$Token) {
 
 function Test-AskuBind([byte[]]$Token, [byte[]]$PubB, [byte[]]$Bind) { Test-AskuEqual (Get-AskuHmac $Token $PubB) $Bind }
 
+# The agent's binding when it joins a browser-created session: HMAC(T, pubA), base64.
+function Get-AskuBindMac([byte[]]$Token, [byte[]]$Pub) { [Convert]::ToBase64String((Get-AskuHmac $Token $Pub)) }
+
 # ---- CLI ----------------------------------------------------------------------------------------
 if ($MyInvocation.InvocationName -eq '.') { return } # dot-sourced (tests): functions only
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 [Console]::OutputEncoding = New-Object Text.UTF8Encoding $false
-$Base = if ($env:ASKU_URL) { $env:ASKU_URL } else { 'https://asku.dev' }
 $Root = if ($env:ASKU_HOME) { $env:ASKU_HOME } else { Join-Path $env:USERPROFILE '.asku' }
 $S = Join-Path $Root $(if ($env:ASKU_SESSION) { $env:ASKU_SESSION } else { 'default' })
+$urlFile = Join-Path $S 'url' # a joined session lives on its link's relay
+$Base = if (Test-Path $urlFile) { [IO.File]::ReadAllText($urlFile).Trim() } elseif ($env:ASKU_URL) { $env:ASKU_URL } else { 'https://asku.dev' }
 $WaitSec = if ($env:ASKU_WAIT) { [int]$env:ASKU_WAIT } else { 500 } # no new poll after this; agent tool timeouts are ~600s
 
 function Fail([string]$Msg) { [Console]::Error.WriteLine("asku: $Msg"); exit 1 }
@@ -120,8 +124,7 @@ function Invoke-AskuRequest([string]$Method, [string]$Path, [string]$Body) {
     finally { $resp.Close() }
 }
 
-function Start-AskuSession {
-    if (Test-Path (Join-Path $S 'sid')) { return }
+function New-AskuKey {
     New-Item -ItemType Directory -Force $S | Out-Null
     $p = New-Object Security.Cryptography.CngKeyCreationParameters
     $p.ExportPolicy = [Security.Cryptography.CngExportPolicies]::AllowPlaintextExport
@@ -132,6 +135,12 @@ function Start-AskuSession {
     $k.Dispose()
     Set-State 'priv' ([Convert]::ToBase64String($blob))
     Set-State 'pub' ([Convert]::ToBase64String([byte[]](@(4) + $blob[8..71])))
+    Set-State 'url' $Base
+}
+
+function Start-AskuSession {
+    if (Test-Path (Join-Path $S 'sid')) { return }
+    New-AskuKey
     $t = New-Object byte[] 16
     [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($t)
     Set-State 'T' (ConvertTo-AskuHex $t)
@@ -141,6 +150,31 @@ function Start-AskuSession {
     $j = $r.Body | ConvertFrom-Json
     Set-State 'sid' $j.sid
     Set-State 'key' $j.key
+}
+
+# Joins a session the user started on the website. Resume-Asku then prints their opening note.
+function Join-AskuSession([string]$Link) {
+    if (Test-Path (Join-Path $S 'sid')) { Fail "session is in use; run: $PSCommandPath close, or set ASKU_SESSION" }
+    if ($Link -notmatch '^(https?://[^/#]+)/j/([A-Za-z0-9_-]{22})#([0-9a-f]{64})\.([0-9a-f]{32})$') { Fail "not an asku agent link: $Link" }
+    $script:Base = $Matches[1]
+    $sid = $Matches[2]; $hash = $Matches[3]; $token = ConvertFrom-AskuHex $Matches[4]
+    $r = Invoke-AskuRequest GET "/s/$sid"
+    if (-not $r) { Fail "relay unreachable: $Base" }
+    if ($r.Code -ne 200) { Fail "session not found ($($r.Code)); ask the user for a new link" }
+    $j = $r.Body | ConvertFrom-Json
+    if ($j.role -ne 'browser') { Fail 'that is a link for the user, not for the agent' }
+    $peer = [Convert]::FromBase64String($j.pub)
+    if ((ConvertTo-AskuHex (Get-AskuSha256 $peer)) -ne $hash) { Fail "the link doesn't match its session; ask the user for a new one" }
+    New-AskuKey
+    $mine = [Convert]::FromBase64String((Get-State 'pub'))
+    $r = Invoke-AskuRequest POST "/s/$sid/bind" ('{"pub":"' + (Get-State 'pub') + '","mac":"' + (Get-AskuBindMac $token $mine) + '"}')
+    if (-not $r) { Remove-Session; Fail "relay unreachable: $Base" }
+    if ($r.Code -ne 201) { Remove-Session; Fail "join failed ($($r.Code)): $($r.Body)" } # 409: someone already joined
+    Set-State 'sid' $sid
+    Set-State 'key' ($r.Body | ConvertFrom-Json).key
+    Set-State 'peer' $j.pub
+    Set-State 'seq' 0
+    Set-State 'answered' -1 # the opening note arrives as answer 0
 }
 
 function Get-Link {
@@ -205,6 +239,7 @@ function Resume-Asku {
 
 $usage = @"
 usage: $PSCommandPath ask <questions.json>   send a question, print the answer JSON
+       $PSCommandPath join <agent link>      join a session the user started, print their opening note
        $PSCommandPath wait                   keep waiting after PENDING
        $PSCommandPath close                  end the session
 exit: 0 answered, 1 error, 2 PENDING (run wait)
@@ -221,6 +256,7 @@ switch ($Command) {
         if ($fresh) { Pending "Give the user this link: $(Get-Link)" }
         Resume-Asku
     }
+    'join' { Join-AskuSession $File; Resume-Asku }
     'wait' { Resume-Asku }
     'close' {
         if (Test-Path (Join-Path $S 'sid')) { $null = Invoke-AskuRequest DELETE "/s/$(Get-State 'sid')" }

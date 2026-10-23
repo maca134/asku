@@ -3,7 +3,7 @@ import { test, expect } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { bindTag, checkFragment, deriveKeys, open, seal, type Envelope } from "../src/crypto";
+import { bindTag, checkBind, checkFragment, deriveKeys, open, seal, type Envelope } from "../src/crypto";
 import v from "./vectors.json";
 
 const b = (s: string) => Uint8Array.fromBase64(s);
@@ -21,6 +21,10 @@ test("webcrypto (src/crypto.ts), browser side", async () => {
   expect((await checkFragment(v.fragment, b(v.pubA))).toHex()).toBe(v.token);
   await expect(checkFragment(v.fragment, b(v.pubB))).rejects.toThrow();
   expect(await bindTag(Uint8Array.fromHex(v.token), b(v.pubB))).toBe(v.bind);
+  // browser-created session: the browser checks the agent's binding
+  expect((await checkFragment(v.reverse.fragment, b(v.pubB))).toHex()).toBe(v.token);
+  expect(await checkBind(Uint8Array.fromHex(v.token), b(v.pubA), v.reverse.bind)).toBe(true);
+  expect(await checkBind(Uint8Array.fromHex(v.token), b(v.pubA), flip(v.reverse.bind))).toBe(false);
 
   for (const m of v.messages) {
     const env = envelope(m);
@@ -50,6 +54,8 @@ test("openssl (skill/ask.sh), agent side", () => {
   expect(sh(["fragment", v.pubA, v.token]).out).toBe(v.fragment);
   expect(sh(["bindok", v.token, v.pubB, v.bind]).ok).toBe(true);
   expect(sh(["bindok", v.token, v.pubB, flip(v.bind)]).ok).toBe(false);
+  expect(sh(["fragment", v.pubB, v.token]).out).toBe(v.reverse.fragment);
+  expect(sh(["bindmac", v.token, v.pubA]).out).toBe(v.reverse.bind);
 
   for (const m of v.messages) {
     const sealed = sh(["seal", v.K, v.sid, m.dir, `${m.seq}`, b(m.iv).toHex()], m.pt);
@@ -66,6 +72,7 @@ test.skipIf(process.platform !== "win32")("powershell 5.1 (skill/ask.ps1), agent
   expect([o.K, o.kEnc, o.kMac]).toEqual([v.K, v.kEnc, v.kMac]);
   expect(o.fragment).toBe(v.fragment);
   expect([o.bindOk, o.badBindOk]).toEqual([true, false]);
+  expect([o.reverseFragment, o.reverseBind]).toEqual([v.reverse.fragment, v.reverse.bind]);
   v.messages.forEach((m, i) => {
     expect(o.messages[i]).toEqual({ sealed: envelope(m), opened: utf8(m.pt), rejected: true });
   });

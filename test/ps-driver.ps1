@@ -33,5 +33,7 @@ $messages = foreach ($m in $v.messages) {
     fragment = Get-AskuFragment $pubA $token
     bindOk = Test-AskuBind $token $pubB (& $b64 $v.bind)
     badBindOk = Test-AskuBind $token $pubB $badBind
+    reverseFragment = Get-AskuFragment $pubB $token
+    reverseBind = Get-AskuBindMac $token $pubA
     messages = @($messages)
 } | ConvertTo-Json -Depth 5 -Compress

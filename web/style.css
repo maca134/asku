@@ -77,3 +77,8 @@ button[type=submit] {
 }
 button[disabled] { opacity: .6; cursor: default; }
 p.error:empty { display: none; }
+
+.link { display: flex; gap: .5rem; margin: 1rem 0 .5rem; }
+.link input { flex: 1; min-width: 0; font-family: ui-monospace, monospace; font-size: .85rem; }
+.link button { font: inherit; padding: 0 1rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: inherit; cursor: pointer; }
+.card > .status { padding: 1rem 0 0; }

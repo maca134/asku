@@ -47,11 +47,17 @@ export async function open(keys: Keys, sid: string, dir: Dir, seq: number, env: 
   return td.decode(await subtle.decrypt({ name: "AES-CBC", iv }, keys.enc, ct));
 }
 
-// Browser side of the trust flow: check pubA against the URL fragment, return the token T.
+// "<sha256(pub) hex>.<T hex>": the URL fragment the session creator hands out.
+export const fragmentFor = async (pub: Uint8Array, token: Uint8Array) => `${(await sha256(pub)).toHex()}.${token.toHex()}`;
+
+// Joiner side of the trust flow: check the creator's pub against the URL fragment, return the token T.
 export async function checkFragment(fragment: string, pubA: Uint8Array): Promise<Uint8Array> {
   const [hash, token] = fragment.split(".");
   if (hash !== (await sha256(pubA)).toHex() || !/^[0-9a-f]{32}$/.test(token ?? "")) throw new Error("asku: bad fragment");
   return Uint8Array.fromHex(token);
 }
 
-export const bindTag = async (token: Uint8Array, pubB: Uint8Array) => (await hmac(token, pubB)).toBase64();
+// HMAC(T, joiner's pub): the browser's in an agent-created session, the agent's in a browser-created one.
+export const bindTag = async (token: Uint8Array, pub: Uint8Array) => (await hmac(token, pub)).toBase64();
+export const checkBind = async (token: Uint8Array, pub: Uint8Array, mac: string) =>
+  subtle.verify("HMAC", await hmacKey(token, ["verify"]), Uint8Array.fromBase64(mac), pub);

@@ -25,7 +25,7 @@ test("full session: create, bind, q over SSE, a over long-poll, close", async ()
   const res = await call("GET", `/s/${sid}`);
   expect(res.headers.get("content-security-policy")).toContain("default-src 'none'");
   expect(res.headers.get("referrer-policy")).toBe("no-referrer");
-  expect(await res.json()).toEqual({ pub: v.pubA, bound: false });
+  expect(await res.json()).toEqual({ pub: v.pubA, role: "agent", bound: false });
 
   expect((await call("GET", `/s/${sid}/bind`)).status).toBe(204); // hold expires unbound
   const bindPoll = call("GET", `/s/${sid}/bind`);
@@ -86,8 +86,14 @@ test("rejects bad input", async () => {
 });
 
 test("rate limits session creation per IP", async () => {
+  const own = relay(); // its own relay, so the other tests keep their quota
   const statuses = [];
-  for (let i = 0; i < LIMITS.createPerIp + 1; i++) statuses.push((await call("POST", "/s", { pub: v.pubA })).status);
+  for (let i = 0; i < LIMITS.createPerIp + 1; i++) {
+    const res = await fetch(`${own.server.url.href}s`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pub: v.pubA }) });
+    statuses.push(res.status);
+  }
+  own.stop();
+  expect(statuses.at(-2)).toBe(201);
   expect(statuses.at(-1)).toBe(429);
 });
 
@@ -114,4 +120,31 @@ test("serves the page and hashed assets", async () => {
   } finally {
     s.stop();
   }
+});
+
+test("browser-created session: roles swap, opening note is answer 0", async () => {
+  expect((await call("POST", "/s", { pub: v.pubB, role: "boss" })).status).toBe(400);
+  const res = await call("POST", "/s", { pub: v.pubB, role: "browser" });
+  const { sid, key: bkey } = await res.json();
+  expect(await (await call("GET", `/s/${sid}`)).json()).toEqual({ pub: v.pubB, role: "browser", bound: false });
+  expect((await call("POST", `/s/${sid}/q`, env("q", 1), bkey)).status).toBe(401); // the browser can't ask
+  expect((await call("DELETE", `/s/${sid}`, undefined, bkey)).status).toBe(401);
+
+  const joined = await call("POST", `/s/${sid}/bind`, { pub: v.pubA, mac: v.reverse.bind });
+  expect(joined.status).toBe(201);
+  const { key: akey } = await joined.json();
+  expect(await (await call("GET", `/s/${sid}/bind`)).json()).toEqual({ pub: v.pubA, mac: v.reverse.bind });
+
+  expect((await call("POST", `/s/${sid}/a`, env("a", 0), akey)).status).toBe(401);
+  expect((await call("POST", `/s/${sid}/a`, env("a", 0), bkey)).status).toBe(204);
+  expect((await call("POST", `/s/${sid}/a`, env("a", 0), bkey)).status).toBe(409);
+  expect(await (await call("GET", `/s/${sid}/a?after=-1`)).json()).toEqual([env("a", 0)]);
+  expect((await call("POST", `/s/${sid}/q`, env("q", 1), akey)).status).toBe(204);
+  expect((await call("DELETE", `/s/${sid}`, undefined, akey)).status).toBe(204);
+});
+
+test("agent-created session has no answer 0", async () => {
+  const { sid } = await create();
+  const { key: bkey } = await (await call("POST", `/s/${sid}/bind`, { pub: v.pubB, mac: v.bind })).json();
+  expect((await call("POST", `/s/${sid}/a`, env("a", 0), bkey)).status).toBe(409);
 });

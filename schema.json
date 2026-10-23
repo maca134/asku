@@ -131,6 +131,15 @@
         "note": { "type": "string", "maxLength": 10000, "default": "" },
         "error": { "type": "string", "maxLength": 2000, "description": "Set by the browser when it could not show the question, e.g. it failed schema validation." }
       }
+    },
+    "opening": {
+      "description": "Answer 0 of a session the user started on the website: their message to the agent that joins.",
+      "type": "object",
+      "required": ["note"],
+      "additionalProperties": false,
+      "properties": {
+        "note": { "type": "string", "maxLength": 10000 }
+      }
     }
   }
 }

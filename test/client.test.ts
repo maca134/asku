@@ -3,7 +3,7 @@ import { afterAll, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { bindTag, checkFragment, deriveKeys, open, seal } from "../src/crypto";
+import { bindTag, checkBind, checkFragment, deriveKeys, fragmentFor, open, seal, type Keys } from "../src/crypto";
 import { relay } from "../src/relay";
 import question from "../examples/question.json";
 
@@ -29,7 +29,33 @@ async function browser(link: string, { badToken = false } = {}) {
   const bound = await post(`/s/${sid}/bind`, { pub: pubB.toBase64(), mac: await bindTag(token, pubB) });
   expect(bound.status).toBe(201);
   const { key } = await bound.json();
-  const keys = await deriveKeys(kp.privateKey, pubA);
+  return peer(sid, await deriveKeys(kp.privateKey, pubA), key);
+}
+
+// The user starts the session in the browser and hands the agent a /j/ link.
+async function creator() {
+  const kp = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]);
+  const pubB = new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey));
+  const token = crypto.getRandomValues(new Uint8Array(16));
+  const res = await post("/s", { pub: pubB.toBase64(), role: "browser" });
+  expect(res.status).toBe(201);
+  const { sid, key } = await res.json();
+  return {
+    sid,
+    link: `${base}/j/${sid}#${await fragmentFor(pubB, token)}`,
+    async joined(note: string) {
+      let bind: Response;
+      do bind = await fetch(`${base}/s/${sid}/bind`); while (bind.status === 204);
+      const { pub, mac } = await bind.json();
+      expect(await checkBind(token, Uint8Array.fromBase64(pub), mac)).toBe(true);
+      const s = peer(sid, await deriveKeys(kp.privateKey, Uint8Array.fromBase64(pub)), key);
+      await s.answer(0, { note });
+      return s;
+    },
+  };
+}
+
+function peer(sid: string, keys: Keys, key: string) {
   return {
     sid,
     async question(seq: number) {
@@ -116,4 +142,43 @@ for (const c of clients) {
     expect(await new Response(p.stderr).text()).toContain("without the right token");
     expect((await fetch(`${base}/s/${b.sid}`)).status).toBe(404);
   }, 60_000);
+}
+
+for (const c of clients) {
+  test.skipIf(!c.on)(`${c.name} joins a session the user started`, async () => {
+    const home = mkdtempSync(join(tmpdir(), "asku-")).replaceAll("\\", "/");
+    // ASKU_URL points nowhere: a joined session must use its link's relay
+    const env = { ...process.env, ASKU_URL: "http://127.0.0.1:9", ASKU_HOME: home, ASKU_WAIT: "30" };
+    const run = async (args: string[]) => {
+      const p = Bun.spawn([...c.cmd, ...args], { env, stdout: "pipe", stderr: "pipe" });
+      const [out, err, code] = [await new Response(p.stdout).text(), await new Response(p.stderr).text(), await p.exited];
+      return { code, out, err };
+    };
+    writeFileSync(`${home}/q.json`, JSON.stringify(question));
+    const u = await creator();
+
+    const [head, frag] = u.link.split("#");
+    let res = await run(["join", `${head}#${frag[0] === "0" ? "1" : "0"}${frag.slice(1)}`]);
+    expect(res.code).toBe(1);
+    expect(res.err).toContain("doesn't match");
+
+    const joining = run(["join", u.link]);
+    const note = "Zoë: please fix the build — 日本語";
+    const s = await u.joined(note);
+    res = await joining;
+    expect(res.err).toBe("");
+    expect(res.code).toBe(0);
+    expect(JSON.parse(res.out)).toEqual({ note });
+    expect((await run(["join", u.link])).code).toBe(1); // session already in use
+
+    const asking = run(["ask", `${home}/q.json`]);
+    expect(await s.question(1)).toEqual(question);
+    await s.answer(1, { answers: { go: false }, skipped: [], comments: {}, note: "" });
+    res = await asking;
+    expect(res.code).toBe(0);
+    expect(JSON.parse(res.out).answers).toEqual({ go: false });
+
+    expect((await run(["close"])).code).toBe(0);
+    expect((await fetch(`${base}/s/${u.sid}`)).status).toBe(404);
+  }, 120_000);
 }

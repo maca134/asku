@@ -19,7 +19,9 @@ const HEADERS = {
 };
 
 type Dir = "q" | "a";
-type Session = { sid: string; pub: string; akey: string; bpub: string | null; bmac: string | null; bkey: string | null; bytes: number };
+type Role = "agent" | "browser";
+// pub/role: the side that created the session. peer/mac: the side that joined it.
+type Session = { sid: string; role: Role; pub: string; akey: string | null; peer: string | null; mac: string | null; bkey: string | null; bytes: number };
 
 const sha = (s: string) => new Bun.CryptoHasher("sha256").update(s).digest("hex");
 const rand = (n: number) => crypto.getRandomValues(new Uint8Array(n)).toBase64({ alphabet: "base64url", omitPadding: true });
@@ -43,7 +45,7 @@ function envelope(x: any, dir: Dir) {
   if (!x || typeof x !== "object" || Object.keys(x).length !== 6) return null;
   const { v, seq, iv, ct, tag } = x;
   const ctb = b64(ct);
-  const ok = v === 1 && x.dir === dir && Number.isInteger(seq) && seq >= 1 && seq <= LIMITS.maxSeq
+  const ok = v === 1 && x.dir === dir && Number.isInteger(seq) && seq >= 0 && seq <= LIMITS.maxSeq
     && b64(iv, 16) && ctb && ctb.length % 16 === 0 && b64(tag, 32);
   return ok ? JSON.stringify({ v, seq, dir, iv, ct, tag }) : null;
 }
@@ -59,16 +61,20 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
   const db = new Database(path, { create: true, strict: true });
   db.run("pragma journal_mode = wal");
   db.run(`create table if not exists s (
-    sid text primary key, pub text not null, akey text not null,
-    bpub text, bmac text, bkey text, bytes integer not null default 0, touched integer not null)`);
+    sid text primary key, role text not null, pub text not null, akey text,
+    peer text, mac text, bkey text, bytes integer not null default 0, touched integer not null)`);
   db.run(`create table if not exists m (
     sid text not null, dir text not null, seq integer not null, env text not null,
     primary key (sid, dir, seq)) without rowid`);
 
   const sql = {
     get: db.query<Session, [string]>("select * from s where sid = ?"),
-    create: db.query("insert into s (sid, pub, akey, touched) values (?, ?, ?, ?)"),
-    bind: db.query("update s set bpub = ?, bmac = ?, bkey = ? where sid = ? and bpub is null"),
+    create: db.query("insert into s (sid, role, pub, akey, bkey, touched) values (?, ?, ?, ?, ?, ?)"),
+    // the joiner gets the write key for the role the creator doesn't have
+    bind: db.query(`update s set peer = ?1, mac = ?2,
+      akey = case role when 'browser' then ?3 else akey end,
+      bkey = case role when 'agent' then ?3 else bkey end
+      where sid = ?4 and peer is null`),
     touch: db.query("update s set touched = ? where sid = ?"),
     grow: db.query("update s set bytes = bytes + ?, touched = ? where sid = ?"),
     last: db.query<{ n: number | null }, [string, string]>("select max(seq) n from m where sid = ? and dir = ?"),
@@ -155,7 +161,7 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
   async function route(req: Request, srv: Server): Promise<Response> {
     const url = new URL(req.url);
     const m = req.method;
-    if (m === "GET" && (url.pathname === "/" || /^\/a\/[\w-]{22}$/.test(url.pathname))) return file("index.html", "no-store");
+    if (m === "GET" && (url.pathname === "/" || /^\/[aj]\/[\w-]{22}$/.test(url.pathname))) return file("index.html", "no-store");
     const asset = url.pathname.match(/^\/assets\/([\w-]+\.(?:js|css))$/);
     if (m === "GET" && asset) return file(`assets/${asset[1]}`, "public, max-age=31536000, immutable");
 
@@ -167,9 +173,11 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
       const ip = (ipHeader ? req.headers.get(ipHeader) : srv.requestIP(req)?.address) ?? "?";
       if (limited(ip)) return fail(429, "too many sessions");
       const b = await body(req);
-      if (!isPub(b?.pub)) return fail(400, "bad pub");
+      const role = b?.role ?? "agent";
+      if (!isPub(b?.pub) || (role !== "agent" && role !== "browser")) return fail(400, "bad pub or role");
       const s = { sid: rand(16), key: rand(32) };
-      sql.create.run(s.sid, b.pub, sha(s.key), Date.now());
+      const hash = sha(s.key);
+      sql.create.run(s.sid, role, b.pub, role === "agent" ? hash : null, role === "browser" ? hash : null, Date.now());
       return json(s, 201);
     }
 
@@ -179,7 +187,7 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
 
     switch (`${m} ${sub ?? ""}`) {
       case "GET ":
-        return json({ pub: s.pub, bound: s.bpub !== null });
+        return json({ pub: s.pub, role: s.role, bound: s.peer !== null });
       case "DELETE ":
         if (!authed(req, s.akey)) return fail(401, "unauthorized");
         purge(sid);
@@ -198,7 +206,7 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
         return hold(sid, () => {
           const s = sql.get.get(sid);
           if (!s) return fail(404, "no such session");
-          if (s.bpub) return json({ pub: s.bpub, mac: s.bmac });
+          if (s.peer) return json({ pub: s.peer, mac: s.mac });
         });
       case "GET a":
         sql.touch.run(Date.now(), sid);
@@ -217,7 +225,9 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
         const env = envelope(await body(req), dir);
         if (!env) return fail(400, "bad envelope");
         const seq = JSON.parse(env).seq;
-        const seqOk = dir === "q" ? seq === (sql.last.get(sid, "q")?.n ?? 0) + 1 : sql.has.get(sid, "q", seq) !== null;
+        // a seq 0 is the opening note of a browser-created session
+        const seqOk = dir === "q" ? seq === (sql.last.get(sid, "q")?.n ?? 0) + 1
+          : seq === 0 ? s.role === "browser" : sql.has.get(sid, "q", seq) !== null;
         if (!seqOk) return fail(409, "bad seq");
         if (s.bytes + env.length > LIMITS.sessionBytes) return fail(413, "session full");
         try {
