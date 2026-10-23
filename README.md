@@ -88,7 +88,7 @@ ask.sh version                    # client version, same in both scripts
 - Env: `ASKU_URL` (default `https://asku.dev`), `ASKU_SESSION` (default `default`), `ASKU_HOME`, `ASKU_WAIT` (seconds before `PENDING`, default 500).
 
 ## Relay API
-[`src/relay.ts`](src/relay.ts). `bun src/relay.ts` (env: `PORT`, `ASKU_DB`, `ASKU_HOST`, `ASKU_IP_HEADER`).
+[`src/relay.ts`](src/relay.ts). `bun run dev` builds and runs it on :8080; `bun src/relay.ts` alone (env: `PORT`, `ASKU_DB`, `ASKU_HOST`, `ASKU_IP_HEADER`).
 Trust `ASKU_IP_HEADER` only when nothing but the proxy can reach the port, or anyone can forge it and dodge the rate limit.
 
 ### Deploy
