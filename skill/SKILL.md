@@ -88,6 +88,7 @@ and exits `0` at once. Use it for progress on long work between questions; keep 
     { "id": "env", "type": "single", "label": "Target", "options": ["staging", { "value": "prod", "label": "Production", "md": "Live traffic" }], "default": "staging" },
     { "id": "checks", "type": "multi", "label": "Run checks", "options": ["lint", "test", "e2e"], "min": 1 },
     { "id": "steps", "type": "review", "label": "Migration steps", "options": ["drop old index", "backfill", "add column"] },
+    { "id": "order", "type": "rank", "label": "Ship order", "options": ["api", "web", "mobile"] },
     { "id": "why", "type": "text", "label": "Release notes", "multiline": true, "placeholder": "Optional" },
     { "id": "pct", "type": "number", "label": "Canary %", "min": 0, "max": 100, "step": 5, "default": 10 }
   ]
@@ -101,6 +102,8 @@ and exits `0` at once. Use it for progress on long work between questions; keep 
   - `multi`: pick several. `options` required, `default` string[], `min`, `max`, `other`.
   - `review`: approve or reject each option (a list of proposed changes, files, steps). `options` required, no
     `default`. `required` means every option must be decided.
+  - `rank`: put the options in order with up/down buttons. `options` required, listed in the starting order; no
+    `default`, no top-N. Skipped until the user moves an item or confirms the order as it is.
   - `text`: `default`, `placeholder`, `multiline`, `maxLength`.
   - `number`: `default`, `min`, `max`, `step`.
 - `other: true` (single/multi) adds an "Other" option with a text box. The typed text comes back as a plain value
@@ -126,14 +129,14 @@ and exits `0` at once. Use it for progress on long work between questions; keep 
 ```json
 {
   "seqs": [1],
-  "answers": { "go": true, "env": "prod", "checks": ["lint", "test"], "steps": { "drop old index": false, "backfill": true }, "pct": 25 },
+  "answers": { "go": true, "env": "prod", "checks": ["lint", "test"], "steps": { "drop old index": false, "backfill": true }, "order": ["web", "api", "mobile"], "pct": 25 },
   "skipped": ["why"],
   "comments": { "pct": "Keep it low on Fridays" },
   "note": ""
 }
 ```
 
-- `answers`: confirm → boolean, single/text → string, multi → string[], number → number, review → an object of
+- `answers`: confirm → boolean, single/text → string, multi → string[], rank → every option value, first to last, number → number, review → an object of
   option value → `true` (approved) / `false` (rejected). Options the user left undecided are missing from it. A
   write-in ("Other") is just a value that matches none of your options.
 - `skipped`: optional questions the user left blank.

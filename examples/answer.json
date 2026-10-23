@@ -4,6 +4,7 @@
     "env": "prod",
     "checks": ["lint", "test"],
     "steps": { "drop old index": false, "backfill": true },
+    "order": ["web", "api", "mobile"],
     "pct": 25
   },
   "skipped": ["why"],

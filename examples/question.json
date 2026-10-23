@@ -24,6 +24,7 @@
       "label": "Migration steps",
       "options": ["drop old index", { "value": "backfill", "md": "About 20 min" }, "add column"]
     },
+    { "id": "order", "type": "rank", "label": "Ship order", "options": ["api", "web", "mobile"] },
     { "id": "why", "type": "text", "label": "Release notes", "multiline": true, "placeholder": "Optional" },
     { "id": "pct", "type": "number", "label": "Canary %", "min": 0, "max": 100, "step": 5, "default": 10 }
   ]

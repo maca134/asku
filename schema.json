@@ -31,7 +31,7 @@
       "required": ["id", "type", "label"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
-        "type": { "enum": ["confirm", "single", "multi", "review", "text", "number"] },
+        "type": { "enum": ["confirm", "single", "multi", "review", "rank", "text", "number"] },
         "label": { "type": "string", "minLength": 1, "maxLength": 500 },
         "md": { "$ref": "#/$defs/markdown", "description": "Per-question markdown context." },
         "required": { "type": "boolean" }
@@ -91,6 +91,22 @@
           "if": { "properties": { "type": { "const": "review" } } },
           "then": {
             "description": "Approve or reject each option. Answered as a map of option value to boolean; undecided options are left out.",
+            "required": ["options"],
+            "properties": {
+              "id": true,
+              "type": true,
+              "label": true,
+              "md": true,
+              "required": true,
+              "options": { "type": "array", "items": { "$ref": "#/$defs/option" }, "minItems": 1, "maxItems": 100 }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "rank" } } },
+          "then": {
+            "description": "Put the options in order. Answered as every option value, first to last.",
             "required": ["options"],
             "properties": {
               "id": true,
@@ -188,7 +204,7 @@
           "type": "object",
           "propertyNames": { "$ref": "#/$defs/id" },
           "additionalProperties": {
-            "description": "confirm: boolean, single/text: string, multi: string[], number: number, review: {value: boolean}.",
+            "description": "confirm: boolean, single/text: string, multi/rank: string[], number: number, review: {value: boolean}.",
             "type": ["boolean", "string", "number", "array", "object"],
             "items": { "type": "string" },
             "additionalProperties": { "type": "boolean" }
