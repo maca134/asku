@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://asku.dev/schema.json",
+  "title": "asku plaintext payloads",
+  "description": "Plaintext inside the encrypted envelope. dir=q carries a Question, dir=a carries an Answer.",
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+    "markdown": { "type": "string", "maxLength": 65536 },
+    "option": {
+      "description": "A bare string is shorthand for {value: s, label: s}.",
+      "oneOf": [
+        { "type": "string", "minLength": 1, "maxLength": 200 },
+        {
+          "type": "object",
+          "required": ["value"],
+          "additionalProperties": false,
+          "properties": {
+            "value": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "label": { "type": "string", "maxLength": 200 },
+            "md": { "$ref": "#/$defs/markdown" }
+          }
+        }
+      ]
+    },
+    "item": {
+      "type": "object",
+      "required": ["id", "type", "label"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "enum": ["confirm", "single", "multi", "text", "number"] },
+        "label": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "md": { "$ref": "#/$defs/markdown", "description": "Per-question markdown context." },
+        "required": { "type": "boolean", "default": false }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "confirm" } } },
+          "then": {
+            "properties": {
+              "id": true, "type": true, "label": true, "md": true, "required": true,
+              "default": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "single" } } },
+          "then": {
+            "required": ["options"],
+            "properties": {
+              "id": true, "type": true, "label": true, "md": true, "required": true,
+              "options": { "type": "array", "items": { "$ref": "#/$defs/option" }, "minItems": 1, "maxItems": 100 },
+              "default": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "multi" } } },
+          "then": {
+            "required": ["options"],
+            "properties": {
+              "id": true, "type": true, "label": true, "md": true, "required": true,
+              "options": { "type": "array", "items": { "$ref": "#/$defs/option" }, "minItems": 1, "maxItems": 100 },
+              "default": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+              "min": { "type": "integer", "minimum": 0 },
+              "max": { "type": "integer", "minimum": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "text" } } },
+          "then": {
+            "properties": {
+              "id": true, "type": true, "label": true, "md": true, "required": true,
+              "default": { "type": "string" },
+              "placeholder": { "type": "string", "maxLength": 200 },
+              "multiline": { "type": "boolean", "default": false },
+              "maxLength": { "type": "integer", "minimum": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "number" } } },
+          "then": {
+            "properties": {
+              "id": true, "type": true, "label": true, "md": true, "required": true,
+              "default": { "type": "number" },
+              "min": { "type": "number" },
+              "max": { "type": "number" },
+              "step": { "type": "number", "exclusiveMinimum": 0 }
+            },
+            "additionalProperties": false
+          }
+        }
+      ]
+    },
+    "question": {
+      "type": "object",
+      "required": ["questions"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "maxLength": 200 },
+        "md": { "$ref": "#/$defs/markdown", "description": "Markdown context shown above all questions." },
+        "questions": { "type": "array", "items": { "$ref": "#/$defs/item" }, "minItems": 1, "maxItems": 50 }
+      }
+    },
+    "answer": {
+      "type": "object",
+      "required": ["answers"],
+      "additionalProperties": false,
+      "properties": {
+        "answers": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/id" },
+          "additionalProperties": {
+            "description": "confirm: boolean, single/text: string, multi: string[], number: number.",
+            "type": ["boolean", "string", "number", "array"],
+            "items": { "type": "string" }
+          }
+        },
+        "skipped": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true, "default": [] },
+        "comments": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/id" },
+          "additionalProperties": { "type": "string", "maxLength": 10000 },
+          "default": {}
+        },
+        "note": { "type": "string", "maxLength": 10000, "default": "" }
+      }
+    }
+  }
+}

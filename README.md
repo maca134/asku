@@ -1,0 +1,66 @@
+# asku
+
+E2EE relay that lets any AI agent ask a human questions via rich web controls.
+Agent POSTs encrypted questions, human answers in a browser, agent polls for encrypted answers.
+Multi-round sessions.
+
+## Hard requirements
+- Agent side: zero deps, no daemon. `ask.sh` (curl + openssl) and `ask.ps1` (PowerShell 5.1 + .NET Framework only).
+- Any AI agent, not Claude-specific. Distributed as a skill: `SKILL.md` + scripts, also served at `https://asku.dev/skill.md`.
+- Public hosted relay: user moves between networks, uses phone/tablet, Windows + Linux agents.
+- Relay never sees plaintext.
+
+## Stack
+- Relay: `Bun.serve` + `bun:sqlite`, single instance, zero runtime deps. Serves the static frontend too.
+- Frontend: Bun-bundled static assets, hashed + SRI, strict CSP, no runtime CDN. Browser deps OK.
+- Domain: asku.dev. Repo: public, MIT.
+
+## Transport
+- Agent: HTTP long-poll, server holds ≤25s (Bun `idleTimeout: 60`). Script loops internally and exits with `PENDING` (exit 2) before ~540s to stay under the agent tool timeout. Agent re-calls.
+- Browser: SSE for incoming questions, POST for answers.
+- Polling is idempotent via `?after=<seq>`.
+
+## Trust flow
+1. Agent: P-256 keypair A, token T = 16 random bytes.
+2. Agent: `POST /s {pubA}` → `{sid}`.
+3. Agent prints `https://asku.dev/a/<sid>#<sha256(pubA)>.<T>`. The fragment never reaches the server.
+4. Browser: fetch pubA, verify its hash against the fragment.
+5. Browser: keypair B, `POST {pubB, HMAC(T, pubB)}`. Single-use: the relay rejects a second binding.
+6. Agent: poll, verify HMAC, derive keys.
+7. Loop: encrypted q (seq n) ⇄ encrypted a (seq n). Agent sends an explicit `close`.
+- Browser clears the fragment after reading it: `history.replaceState`.
+
+## Crypto (chosen so openssl CLI, .NET Framework and WebCrypto all support it natively)
+```
+Z    = ECDH P-256
+K    = SHA256(Z)                      # matches .NET ECDiffieHellmanCng.DeriveKeyMaterial default
+kEnc = HMAC-SHA256(K, "enc"), kMac = HMAC-SHA256(K, "mac")
+IV   = random 16 bytes per message
+CT   = AES-256-CBC(kEnc, IV, PKCS7(pt))
+TAG  = HMAC-SHA256(kMac, "v1|" + sid + "|" + dir + "|" + seq + "|" + IV + CT)
+Verify TAG in constant time BEFORE decrypt.
+```
+- Public keys on the wire: raw uncompressed point, 65 bytes, base64. openssl converts by prepending the fixed P-256 SPKI header `3059301306072a8648ce3d020106082a8648ce3d030107034200`.
+- UTF-8 everywhere. Standard base64, newlines stripped.
+- `vectors.json` with fixed keys and IVs. All 3 implementations must match. CI on ubuntu + windows + macOS runners.
+
+## Envelope (relay stores opaque)
+`{ "v":1, "seq":n, "dir":"q"|"a", "iv":"…", "ct":"…", "tag":"…" }`
+
+## v1 controls
+`confirm`, `single`, `multi`, `text`, `number`, plus markdown context (DOMPurify) and an implicit per-question comment field.
+Answer shape: `{ "answers": { "<id>": value }, "skipped": [], "comments": { "<id>": "" }, "note": "" }`.
+Plaintext shapes are defined in [`schema.json`](schema.json).
+
+## Relay hygiene
+- Payload cap 256 KB. Per-IP rate limit on session creation.
+- Purge on `close`. 24h idle TTL as fallback.
+- Headers: CSP `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` and `Referrer-Policy: no-referrer`.
+
+## Build order
+1. `schema.json`: question and answer shapes
+2. `vectors.json` + crypto in all 3 runtimes, cross-tested
+3. Relay endpoints
+4. `ask.sh`, then `ask.ps1`
+5. Frontend controls, simplest first
+6. `SKILL.md`
