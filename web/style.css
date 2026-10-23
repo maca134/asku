@@ -298,6 +298,11 @@ h3 { letter-spacing: -.012em; }
 .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; }
 @media (min-width: 1000px) { .chips { justify-content: flex-start; } }
 .chips li { padding: .3rem .75rem; font-size: .82rem; font-weight: 550; color: var(--fg-2); background: var(--surface); border: 1px solid var(--line-2); border-radius: 999px; }
+.ctls { display: grid; gap: 1.25rem; max-width: 64rem; margin: 0 auto; text-align: left; }
+@media (min-width: 720px) { .ctls { grid-template-columns: 1fr 1fr; align-items: start; } }
+.ctl { display: grid; gap: .45rem; }
+.ctl-type { justify-self: start; font-size: .78rem; color: var(--muted); }
+.ctl .countdown, .ctl .mood { margin: 0; }
 .showcase { display: grid; gap: 1.5rem; justify-items: center; }
 @media (min-width: 720px) { .showcase { grid-template-columns: auto minmax(0, 1fr); align-items: center; } }
 .showcase .term { max-height: 440px; }

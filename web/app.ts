@@ -645,6 +645,25 @@ function landing() {
       h("ul", { className: "chips" }, ...["Yes / no", "Pick one", "Pick several", "Text", "Number", "Markdown", "Comments", "Let the agent decide", "Deadlines", "Moods", "Note"].map((c) => h("li", { textContent: c })))),
     showcase())));
 
+  // the real controls, straight on the page; ids are prefixed so their radio groups can't meet the demo's
+  const ctl = (code: string, ...kids: Kid[]) => h("div", { className: "ctl" }, h("code", { className: "ctl-type", textContent: code }), ...kids);
+  const CTLS: Item[] = [
+    { id: "ctl-go", type: "confirm", label: "Deploy v2.3 now?" },
+    { id: "ctl-env", type: "single", label: "Target", options: ["staging", { value: "prod", label: "Production", md: "Live traffic" }], default: "staging" },
+    { id: "ctl-checks", type: "multi", label: "Run checks", options: ["lint", "test", "e2e"], min: 1 },
+    { id: "ctl-pct", type: "number", label: "Canary %", min: 0, max: 100, step: 5, default: 10 },
+    { id: "ctl-name", type: "text", label: "Release name", placeholder: "e.g. Autumn cleanup" },
+    { id: "ctl-notes", type: "text", label: "Release notes", multiline: true, md: "Markdown works on forms, questions and options: **bold**, `code`, lists, tables." },
+  ];
+  const clockAt = h("span");
+  const gallery = h("section", { className: "sec sec-alt" }, h("div", { className: "wrap" },
+    sub("Controls", "Every control, for real", "These are the actual controls on the answer page. Try them: each one takes a comment, and any question can be left to the agent."),
+    h("div", { className: "ctls" },
+      ...CTLS.map((it, i) => ctl(`"type": "${it.type}"${it.type === "text" && it.multiline ? ', "multiline": true' : ""}`, field(it, i).el)),
+      ctl('"deadline": 1800', clockAt),
+      ctl('"mood": "…"', ...(Object.keys(MOODS) as Mood[]).map(moodEl)))));
+  countdown(clockAt, 1800, () => true);
+
   const faq = h("section", { className: "sec" }, h("div", { className: "wrap narrow" },
     sub("FAQ", "Questions people ask", "The short answers."),
     h("dl", { className: "faq" }, ...PAGES["/how"].faq!.flatMap(([q, a]) => [h("dt", { textContent: q }), h("dd", {}, ...rich(a))])),
@@ -717,7 +736,7 @@ function landing() {
       h("a", { href: "/terms", textContent: "Terms" }))));
 
   const missing = h("section", { className: "sec" }, h("div", { className: "wrap narrow" }, stateEl("error", "Page not found", "There's nothing at this address."), next("Go home", "/")));
-  const body = { "/": [hero], "/how": [how, controls, faq], "/security": [security], "/demo": [demos, controls], "/install": [install], "/start": [start], "/terms": [terms] }[path] ?? [missing];
+  const body = { "/": [hero], "/how": [how, controls, faq], "/security": [security], "/demo": [demos, gallery], "/install": [install], "/start": [start], "/terms": [terms] }[path] ?? [missing];
   document.title = PAGES[path]?.title ?? "Not found · asku";
   app.replaceChildren(header, h("main", { className: "landing" }, ...body), footer);
 }
@@ -897,11 +916,11 @@ function phone(url: Node, screen: HTMLElement, ...over: Kid[]) {
       screen, ...over));
 }
 
-// A deadline's countdown above the first question, as on the answer page, on a pretend clock that never runs out.
-function countdown(f: ReturnType<typeof buildForm>, secs: number, alive: () => boolean, moving = () => true) {
+// A deadline's countdown, as on the answer page (put before `at`), on a pretend clock that never runs out.
+function countdown(at: Element, secs: number, alive: () => boolean, moving = () => true) {
   const text = () => `The agent decides without you in ${hms(secs)}`;
   const span = h("span", { textContent: text() });
-  f.fields[0].el.before(h("p", { className: "countdown" }, icon("clock"), span));
+  at.before(h("p", { className: "countdown" }, icon("clock"), span));
   const t = setInterval(() => {
     if (!alive()) return clearInterval(t);
     if (moving() && secs > 1) { secs--; span.textContent = text(); }
@@ -911,7 +930,7 @@ function countdown(f: ReturnType<typeof buildForm>, secs: number, alive: () => b
 // The real form, lightly interactive, next to the JSON it would send.
 function showcase() {
   const f = buildForm({ ...example, mood: "confident" } as Question);
-  countdown(f, 1800, () => true);
+  countdown(f.fields[0].el, 1800, () => true);
   const out = h("pre", { className: "json", ariaLive: "polite", ariaLabel: "Answer JSON" });
   const update = () => out.replaceChildren(...jsonNodes(f.collect(false).a));
   f.form.addEventListener("input", update);
@@ -1099,7 +1118,7 @@ function demo(sc = DEPLOY) {
     const $ = (id: string, sel: string) => f.fields.find((x) => x.it.id === id)!.el.querySelector(sel) as HTMLInputElement;
     const fd = h("ol", { className: "feed" }, h("li", { className: "open" }, f.form));
     // stops on the next loop, or when the scene is switched
-    if (sc.q.deadline) countdown(f, sc.q.deadline, () => my === gen && root.isConnected, () => !paused && visible && !fast);
+    if (sc.q.deadline) countdown(f.fields[0].el, sc.q.deadline, () => my === gen && root.isConnected, () => !paused && visible && !fast);
 
     await wait(700);
     const you = line("prompt", h("span", { className: "t-dim", textContent: "› " }));
