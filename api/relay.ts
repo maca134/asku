@@ -15,7 +15,8 @@ export const LIMITS = {
 };
 
 const HEADERS = {
-  "content-security-policy": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+  "content-security-policy":
+    "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
   "referrer-policy": "no-referrer",
   "x-content-type-options": "nosniff",
   "cache-control": "no-store",
@@ -23,7 +24,8 @@ const HEADERS = {
 };
 
 const sha = (s: string) => new Bun.CryptoHasher("sha256").update(s).digest("hex");
-const rand = (n: number) => crypto.getRandomValues(new Uint8Array(n)).toBase64({ alphabet: "base64url", omitPadding: true });
+const rand = (n: number) =>
+  crypto.getRandomValues(new Uint8Array(n)).toBase64({ alphabet: "base64url", omitPadding: true });
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 const fail = (status: number, error: string) => json({ error }, status);
 const empty = (status = 204) => new Response(null, { status });
@@ -44,17 +46,29 @@ const isPub = (s: unknown) => b64(s, 65)?.[0] === 4;
 export function ipKey(ip: string) {
   if (!ip.includes(":") || ip.startsWith("::ffff:")) return ip;
   const [head, tail] = ip.split("::");
-  const a = head ? head.split(":") : [], b = tail ? tail.split(":") : [];
+  const a = head ? head.split(":") : [],
+    b = tail ? tail.split(":") : [];
   const full = tail === undefined ? a : [...a, ...Array(8 - a.length - b.length).fill("0"), ...b];
-  return `${full.slice(0, 4).map((x) => parseInt(x, 16).toString(16)).join(":")}::/64`;
+  return `${full
+    .slice(0, 4)
+    .map((x) => parseInt(x, 16).toString(16))
+    .join(":")}::/64`;
 }
 
 function envelope(x: any, dir: Dir) {
   if (!x || typeof x !== "object" || Object.keys(x).length !== 6) return null;
   const { v, seq, iv, ct, tag } = x;
   const ctb = b64(ct);
-  const ok = v === 1 && x.dir === dir && Number.isInteger(seq) && seq >= 0 && seq <= LIMITS.maxSeq
-    && b64(iv, 16) && ctb && ctb.length % 16 === 0 && b64(tag, 32);
+  const ok =
+    v === 1 &&
+    x.dir === dir &&
+    Number.isInteger(seq) &&
+    seq >= 0 &&
+    seq <= LIMITS.maxSeq &&
+    b64(iv, 16) &&
+    ctb &&
+    ctb.length % 16 === 0 &&
+    b64(tag, 32);
   return ok ? JSON.stringify({ v, seq, dir, iv, ct, tag }) : null;
 }
 
@@ -63,8 +77,20 @@ async function body(req: Request) {
   return req.json().catch(() => null);
 }
 
-export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${import.meta.dir}/../dist`, holdMs = 25_000, ipHeader }: {
-  port?: number; hostname?: string; db?: string; dist?: string; holdMs?: number; ipHeader?: string;
+export function relay({
+  port = 0,
+  hostname,
+  db: path = ":memory:",
+  dist = `${import.meta.dir}/../dist`,
+  holdMs = 25_000,
+  ipHeader,
+}: {
+  port?: number;
+  hostname?: string;
+  db?: string;
+  dist?: string;
+  holdMs?: number;
+  ipHeader?: string;
 } = {}) {
   const { db, sql, purge, store } = openStore(path);
 
@@ -74,7 +100,10 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
     let set = subs.get(sid);
     if (!set) subs.set(sid, (set = new Set()));
     set.add(fn);
-    return () => { set.delete(fn); if (!set.size) subs.delete(sid); };
+    return () => {
+      set.delete(fn);
+      if (!set.size) subs.delete(sid);
+    };
   };
   const notify = (sid: string) => subs.get(sid)?.forEach((fn) => fn());
 
@@ -89,7 +118,11 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
       await new Promise<void>((done) => {
         const t = setTimeout(fin, left);
         const unsub = subscribe(sid, fin);
-        function fin() { clearTimeout(t); unsub(); done(); }
+        function fin() {
+          clearTimeout(t);
+          unsub();
+          done();
+        }
       });
     }
   }
@@ -102,12 +135,22 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
       start(c) {
         const send = (s: string) => c.enqueue(te.encode(s));
         const push = () => {
-          if (!sql.get.get(sid)) { send("event: close\ndata:\n\n"); cleanup(); return c.close(); }
-          for (const m of sql.after.all(sid, "q", after)) { send(`id: ${m.seq}\nevent: q\ndata: ${m.env}\n\n`); after = m.seq; }
+          if (!sql.get.get(sid)) {
+            send("event: close\ndata:\n\n");
+            cleanup();
+            return c.close();
+          }
+          for (const m of sql.after.all(sid, "q", after)) {
+            send(`id: ${m.seq}\nevent: q\ndata: ${m.env}\n\n`);
+            after = m.seq;
+          }
         };
         const unsub = subscribe(sid, push);
         const ping = setInterval(() => send(": ping\n\n"), 20_000);
-        cleanup = () => { clearInterval(ping); unsub(); };
+        cleanup = () => {
+          clearInterval(ping);
+          unsub();
+        };
         push();
       },
       cancel: () => cleanup(),
@@ -149,8 +192,15 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
     if (m === "GET" && asset) return file(`assets/${asset[1]}`, "public, max-age=31536000, immutable");
     // The skill: SKILL.md, the agent scripts and the schema, as plain text so curl and browsers both just show them.
     if (m === "GET" && /^\/(skill\.md|ask\.sh|ask\.ps1|schema\.json)$/.test(url.pathname))
-      return file(url.pathname.slice(1), "no-cache", url.pathname.endsWith(".json") ? "application/json" : "text/plain; charset=utf-8");
-    if (m === "GET" && /^\/(robots\.txt|sitemap\.xml|og\.png|favicon\.(svg|ico)|apple-touch-icon\.png)$/.test(url.pathname))
+      return file(
+        url.pathname.slice(1),
+        "no-cache",
+        url.pathname.endsWith(".json") ? "application/json" : "text/plain; charset=utf-8",
+      );
+    if (
+      m === "GET" &&
+      /^\/(robots\.txt|sitemap\.xml|og\.png|favicon\.(svg|ico)|apple-touch-icon\.png)$/.test(url.pathname)
+    )
       return file(url.pathname.slice(1), "public, max-age=86400");
 
     const [, root, sid, sub, extra] = url.pathname.split("/");
@@ -205,7 +255,10 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
         return hold(sid, () => {
           if (!sql.get.get(sid)) return fail(404, "no such session");
           const rows = sql.after.all(sid, "a", after);
-          if (rows.length) return new Response(`[${rows.map((r) => r.env).join(",")}]`, { headers: { "content-type": "application/json" } });
+          if (rows.length)
+            return new Response(`[${rows.map((r) => r.env).join(",")}]`, {
+              headers: { "content-type": "application/json" },
+            });
         });
       case "GET q":
         sql.touch.run(Date.now(), sid);
@@ -220,8 +273,12 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
         // "duplicate": that seq is already stored, so a retry can count as sent; "bad seq" is a real conflict
         if (sql.has.get(sid, dir, seq)) return fail(409, "duplicate");
         // a seq 0 is the opening note of a browser-created session
-        const seqOk = dir === "q" ? seq === (sql.last.get(sid, "q")?.n ?? 0) + 1
-          : seq === 0 ? s.role === "browser" : sql.has.get(sid, "q", seq) !== null;
+        const seqOk =
+          dir === "q"
+            ? seq === (sql.last.get(sid, "q")?.n ?? 0) + 1
+            : seq === 0
+              ? s.role === "browser"
+              : sql.has.get(sid, "q", seq) !== null;
         if (!seqOk) return fail(409, "bad seq");
         if (s.bytes + env.length > LIMITS.sessionBytes) return fail(413, "session full");
         if (sql.totals.get()!.b + env.length > LIMITS.totalBytes) return fail(503, "relay full");
@@ -243,21 +300,31 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
     idleTimeout: 60,
     maxRequestBodySize: LIMITS.body,
     async fetch(req, srv) {
-      const res = await route(req, srv).catch((e) => { console.error(e); return fail(500, "internal error"); });
+      const res = await route(req, srv).catch((e) => {
+        console.error(e);
+        return fail(500, "internal error");
+      });
       for (const [k, v] of Object.entries(HEADERS)) if (!res.headers.has(k)) res.headers.set(k, v);
       return res;
     },
   });
 
   const sweep = setInterval(() => {
-    for (const { sid } of sql.expired.all(Date.now() - LIMITS.ttlMs)) { purge(sid); notify(sid); }
+    for (const { sid } of sql.expired.all(Date.now() - LIMITS.ttlMs)) {
+      purge(sid);
+      notify(sid);
+    }
     const now = Date.now();
     for (const [ip, h] of hits) if (h.every((t) => now - t >= LIMITS.createWindowMs)) hits.delete(ip);
   }, 10 * 60_000);
 
   return {
     server,
-    stop() { clearInterval(sweep); server.stop(true); db.close(); },
+    stop() {
+      clearInterval(sweep);
+      server.stop(true);
+      db.close();
+    },
   };
 }
 

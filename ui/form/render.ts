@@ -5,7 +5,13 @@ import { batchName, event, hms, live, show, stateEl, tabTitle, toFeed, waiting, 
 import type { Answer, Question } from "../types";
 import { buildForm } from "./form";
 
-export const sentState = () => stateEl("done", "Answers sent", "Encrypted on this device and delivered to your agent. Keep this tab open for follow-up questions.", live(WORKING));
+export const sentState = () =>
+  stateEl(
+    "done",
+    "Answers sent",
+    "Encrypted on this device and delivered to your agent. Keep this tab open for follow-up questions.",
+    live(WORKING),
+  );
 const smooth = (): ScrollBehavior => (matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
 
 export type Batch = [seq: number, q: Question];
@@ -23,12 +29,20 @@ export function render(batches: Batch[], send: (seqs: number[], a: Answer) => Pr
   const names = [batchName(q)];
   const born = Date.now();
   const parts: Part[] = [];
-  let unseen = 0, first: Element | undefined;
+  let unseen = 0,
+    first: Element | undefined;
   const said = h("p", { className: "sr-only", ariaLive: "polite" });
-  const chip = h("button", { type: "button", className: "new-chip", onclick: () => first?.scrollIntoView({ behavior: smooth(), block: "start" }) });
+  const chip = h("button", {
+    type: "button",
+    className: "new-chip",
+    onclick: () => first?.scrollIntoView({ behavior: smooth(), block: "start" }),
+  });
   const seen = new IntersectionObserver((es) => {
     if (!es.some((x) => x.isIntersecting)) return;
-    chip.remove(); unseen = 0; first = undefined; seen.disconnect();
+    chip.remove();
+    unseen = 0;
+    first = undefined;
+    seen.disconnect();
   });
   const decline = h("button", { type: "button", className: "btn btn-secondary btn-sm" }, "Decline, send only the note");
   decline.onclick = () => submit(parts, true);
@@ -36,7 +50,11 @@ export function render(batches: Batch[], send: (seqs: number[], a: Answer) => Pr
   f.form.append(said);
 
   const part = (s: number, fs: Fields, q: Question) => {
-    const btn = h("button", { type: "button", className: "btn btn-secondary btn-sm" }, `Send ${fs.length === 1 ? "this answer" : `these ${fs.length} answers`}`);
+    const btn = h(
+      "button",
+      { type: "button", className: "btn btn-secondary btn-sm" },
+      `Send ${fs.length === 1 ? "this answer" : `these ${fs.length} answers`}`,
+    );
     const p: Part = { seq: s, fields: fs, foot: h("div", { className: "batch-foot" }, btn) };
     btn.onclick = () => submit([p]);
     fs[fs.length - 1].el.after(p.foot);
@@ -48,7 +66,7 @@ export function render(batches: Batch[], send: (seqs: number[], a: Answer) => Pr
   // A batch with a deadline counts down above its first question. At zero it locks: the agent stops waiting then.
   // ponytail: trusts the agent's and the phone's clocks to agree; both are usually NTP-synced.
   const clock = (p: Part, end: number) => {
-    const el = p.clock = h("p", { className: "countdown", role: "timer" }, icon("clock"), h("span"));
+    const el = (p.clock = h("p", { className: "countdown", role: "timer" }, icon("clock"), h("span")));
     p.fields[0].el.before(el);
     const tick = () => {
       if (!el.isConnected) return clearInterval(t); // sent, or the form is gone
@@ -65,7 +83,14 @@ export function render(batches: Batch[], send: (seqs: number[], a: Answer) => Pr
     setTimeout(tick); // after render() has put the form on the page
   };
   const expire = (p: Part) => {
-    p.clock!.replaceWith(h("p", { className: "batch-sent expired" }, icon("clock"), "Time's up. The agent went ahead without these answers."));
+    p.clock!.replaceWith(
+      h(
+        "p",
+        { className: "batch-sent expired" },
+        icon("clock"),
+        "Time's up. The agent went ahead without these answers.",
+      ),
+    );
     p.foot.remove();
     f.remove(p.fields);
     parts.splice(parts.indexOf(p), 1);
@@ -100,7 +125,8 @@ export function render(batches: Batch[], send: (seqs: number[], a: Answer) => Pr
         f.form.querySelector<HTMLElement>(".invalid [aria-describedby]")?.focus({ preventScroll: true });
         return;
       }
-      if (all && unseen) { // don't send questions the user hasn't seen as "skipped"
+      if (all && unseen) {
+        // don't send questions the user hasn't seen as "skipped"
         f.err.textContent = "New questions just arrived. Have a look, then send again.";
         first?.scrollIntoView({ behavior: smooth(), block: "start" });
         unseen = 0;
@@ -119,7 +145,14 @@ export function render(batches: Batch[], send: (seqs: number[], a: Answer) => Pr
       } else {
         for (const p of ps) {
           p.clock?.remove();
-          p.foot.replaceWith(h("p", { className: "batch-sent" }, icon("check"), `Sent ${p.fields.length === 1 ? "1 answer" : `${p.fields.length} answers`}`));
+          p.foot.replaceWith(
+            h(
+              "p",
+              { className: "batch-sent" },
+              icon("check"),
+              `Sent ${p.fields.length === 1 ? "1 answer" : `${p.fields.length} answers`}`,
+            ),
+          );
           f.remove(p.fields);
           parts.splice(parts.indexOf(p), 1);
         }
@@ -130,13 +163,17 @@ export function render(batches: Batch[], send: (seqs: number[], a: Answer) => Pr
     } catch (x) {
       busy(false);
       const m = (x as Error).message;
-      f.err.textContent = m === "Failed to fetch" ? "Couldn't reach the relay. Check your connection and send again." : `Not sent: ${m}. Try again.`;
+      f.err.textContent =
+        m === "Failed to fetch"
+          ? "Couldn't reach the relay. Check your connection and send again."
+          : `Not sent: ${m}. Try again.`;
     }
     done();
   };
 
   const o: Open = {
-    f, sending: false,
+    f,
+    sending: false,
     add([s, b]) {
       const r = f.append(b);
       names.push(batchName(b));
@@ -156,7 +193,10 @@ export function render(batches: Batch[], send: (seqs: number[], a: Answer) => Pr
   };
   part(seq, f.fields.slice(), q);
   rest.forEach(o.add);
-  f.form.onsubmit = (e) => { e.preventDefault(); submit(parts); };
+  f.form.onsubmit = (e) => {
+    e.preventDefault();
+    submit(parts);
+  };
   toFeed(li);
   show();
   li.scrollIntoView({ block: "start" });

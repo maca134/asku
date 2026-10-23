@@ -4,7 +4,16 @@ import { Database } from "bun:sqlite";
 export type Dir = "q" | "a";
 type Role = "agent" | "browser";
 // pub/role: the side that created the session. peer/mac: the side that joined it.
-export type Session = { sid: string; role: Role; pub: string; akey: string | null; peer: string | null; mac: string | null; bkey: string | null; bytes: number };
+export type Session = {
+  sid: string;
+  role: Role;
+  pub: string;
+  akey: string | null;
+  peer: string | null;
+  mac: string | null;
+  bkey: string | null;
+  bytes: number;
+};
 
 export function openStore(path: string) {
   const db = new Database(path, { create: true, strict: true });
@@ -29,14 +38,19 @@ export function openStore(path: string) {
     last: db.query<{ n: number | null }, [string, string]>("select max(seq) n from m where sid = ? and dir = ?"),
     has: db.query("select 1 from m where sid = ? and dir = ? and seq = ?"),
     insert: db.query("insert into m (sid, dir, seq, env) values (?, ?, ?, ?)"),
-    after: db.query<{ seq: number; env: string }, [string, string, number]>("select seq, env from m where sid = ? and dir = ? and seq > ? order by seq"),
+    after: db.query<{ seq: number; env: string }, [string, string, number]>(
+      "select seq, env from m where sid = ? and dir = ? and seq > ? order by seq",
+    ),
     // ponytail: full scan of s per write; fine at LIMITS.sessions rows, keep a running total if that grows.
     totals: db.query<{ n: number; b: number }, []>("select count(*) n, coalesce(sum(bytes), 0) b from s"),
     expired: db.query<{ sid: string }, [number]>("select sid from s where touched < ?"),
     delS: db.query("delete from s where sid = ?"),
     delM: db.query("delete from m where sid = ?"),
   };
-  const purge = db.transaction((sid: string) => { sql.delM.run(sid); sql.delS.run(sid); });
+  const purge = db.transaction((sid: string) => {
+    sql.delM.run(sid);
+    sql.delS.run(sid);
+  });
   const store = db.transaction((sid: string, dir: Dir, seq: number, env: string) => {
     sql.insert.run(sid, dir, seq, env);
     sql.grow.run(env.length, Date.now(), sid);

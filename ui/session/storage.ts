@@ -1,5 +1,14 @@
 // agentPub is unset while a session this browser created waits for its agent; browserPub, token and note are only kept until then.
-export type State = { priv: CryptoKey; key: string; answered: number[]; start?: number; agentPub?: string; browserPub?: string; token?: string; note?: string };
+export type State = {
+  priv: CryptoKey;
+  key: string;
+  answered: number[];
+  start?: number;
+  agentPub?: string;
+  browserPub?: string;
+  token?: string;
+  note?: string;
+};
 
 // ---- persistence: the fragment is gone after first load, so key pair B and the write key live in IndexedDB.
 // ponytail: IndexedDB unavailable (some private modes) means a reload loses the session; fine, the agent can start a new one.

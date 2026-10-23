@@ -14,7 +14,8 @@ export const post = (path: string, body: unknown, key?: string) =>
 export async function send(sid: string, keys: Keys, state: State, seqs: number[], a: Answer | { note: string }) {
   const res = await post(`/s/${sid}/a`, await seal(keys, sid, "a", Math.max(...seqs), JSON.stringify(a)), state.key);
   // duplicate: a retry of an answer the relay already has
-  if (res.status !== 204 && !(res.status === 409 && (await res.json().catch(() => ({}))).error === "duplicate")) throw new Error(`relay said ${res.status}`);
+  if (res.status !== 204 && !(res.status === 409 && (await res.json().catch(() => ({}))).error === "duplicate"))
+    throw new Error(`relay said ${res.status}`);
   state.answered.push(...seqs);
   await save(sid, state);
 }

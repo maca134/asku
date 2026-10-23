@@ -3,7 +3,13 @@
   "md": "About to deploy **v2.3** to production.",
   "questions": [
     { "id": "go", "type": "confirm", "label": "Deploy now?", "required": true },
-    { "id": "env", "type": "single", "label": "Target", "options": ["staging", { "value": "prod", "label": "Production", "md": "Live traffic" }], "default": "staging" },
+    {
+      "id": "env",
+      "type": "single",
+      "label": "Target",
+      "options": ["staging", { "value": "prod", "label": "Production", "md": "Live traffic" }],
+      "default": "staging"
+    },
     { "id": "checks", "type": "multi", "label": "Run checks", "options": ["lint", "test", "e2e"], "min": 1 },
     { "id": "why", "type": "text", "label": "Release notes", "multiline": true, "placeholder": "Optional" },
     { "id": "pct", "type": "number", "label": "Canary %", "min": 0, "max": 100, "step": 5, "default": 10 }

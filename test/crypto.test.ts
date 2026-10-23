@@ -7,7 +7,11 @@ import { bindTag, checkBind, checkFragment, deriveKeys, open, seal, type Envelop
 import v from "./vectors.json";
 
 const b = (s: string) => Uint8Array.fromBase64(s);
-const flip = (s: string) => { const x = b(s); x[0] ^= 1; return x.toBase64(); };
+const flip = (s: string) => {
+  const x = b(s);
+  x[0] ^= 1;
+  return x.toBase64();
+};
 const envelope = ({ pt, ...env }: (typeof v.messages)[number]) => env as Envelope;
 const utf8 = (s: string) => Buffer.from(s, "utf8").toString("base64");
 
@@ -39,14 +43,21 @@ test("webcrypto (shared/crypto.ts), browser side", async () => {
 
 test("openssl (skill/ask.sh), agent side", () => {
   const sh = (args: string[], stdin?: string) => {
-    const r = Bun.spawnSync([process.env.ASKU_BASH ?? "bash", "-c", '. skill/ask.sh && "$@"', "_", ...args],
-      { stdin: stdin === undefined ? "ignore" : Buffer.from(stdin, "utf8") });
+    const r = Bun.spawnSync([process.env.ASKU_BASH ?? "bash", "-c", '. skill/ask.sh && "$@"', "_", ...args], {
+      stdin: stdin === undefined ? "ignore" : Buffer.from(stdin, "utf8"),
+    });
     return { ok: r.exitCode === 0, out: r.stdout.toString("utf8"), err: r.stderr.toString() };
   };
   // PKCS#8 DER for a bare P-256 private scalar
   const der = Buffer.from("3041020100301306072a8648ce3d020106082a8648ce3d030107042730250201010420" + v.privA, "hex");
   const pem = join(mkdtempSync(join(tmpdir(), "asku-")), "a.pem");
-  writeFileSync(pem, `-----BEGIN PRIVATE KEY-----\n${der.toString("base64").match(/.{1,64}/g)!.join("\n")}\n-----END PRIVATE KEY-----\n`);
+  writeFileSync(
+    pem,
+    `-----BEGIN PRIVATE KEY-----\n${der
+      .toString("base64")
+      .match(/.{1,64}/g)!
+      .join("\n")}\n-----END PRIVATE KEY-----\n`,
+  );
 
   const K = sh(["derive", pem, v.pubB]);
   expect(K.err).toBe("");
@@ -65,15 +76,27 @@ test("openssl (skill/ask.sh), agent side", () => {
   }
 }, 60_000);
 
-test.skipIf(process.platform !== "win32")("powershell 5.1 (skill/ask.ps1), agent side", () => {
-  const r = Bun.spawnSync(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "test/ps-driver.ps1", "test/vectors.json"]);
-  expect(r.stderr.toString()).toBe("");
-  const o = JSON.parse(r.stdout.toString());
-  expect([o.K, o.kEnc, o.kMac]).toEqual([v.K, v.kEnc, v.kMac]);
-  expect(o.fragment).toBe(v.fragment);
-  expect([o.bindOk, o.badBindOk]).toEqual([true, false]);
-  expect([o.reverseFragment, o.reverseBind]).toEqual([v.reverse.fragment, v.reverse.bind]);
-  v.messages.forEach((m, i) => {
-    expect(o.messages[i]).toEqual({ sealed: envelope(m), opened: utf8(m.pt), rejected: true });
-  });
-}, 60_000);
+test.skipIf(process.platform !== "win32")(
+  "powershell 5.1 (skill/ask.ps1), agent side",
+  () => {
+    const r = Bun.spawnSync([
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "test/ps-driver.ps1",
+      "test/vectors.json",
+    ]);
+    expect(r.stderr.toString()).toBe("");
+    const o = JSON.parse(r.stdout.toString());
+    expect([o.K, o.kEnc, o.kMac]).toEqual([v.K, v.kEnc, v.kMac]);
+    expect(o.fragment).toBe(v.fragment);
+    expect([o.bindOk, o.badBindOk]).toEqual([true, false]);
+    expect([o.reverseFragment, o.reverseBind]).toEqual([v.reverse.fragment, v.reverse.bind]);
+    v.messages.forEach((m, i) => {
+      expect(o.messages[i]).toEqual({ sealed: envelope(m), opened: utf8(m.pt), rejected: true });
+    });
+  },
+  60_000,
+);

@@ -37,7 +37,11 @@
           "if": { "properties": { "type": { "const": "confirm" } } },
           "then": {
             "properties": {
-              "id": true, "type": true, "label": true, "md": true, "required": true,
+              "id": true,
+              "type": true,
+              "label": true,
+              "md": true,
+              "required": true,
               "default": { "type": "boolean" }
             },
             "additionalProperties": false
@@ -48,7 +52,11 @@
           "then": {
             "required": ["options"],
             "properties": {
-              "id": true, "type": true, "label": true, "md": true, "required": true,
+              "id": true,
+              "type": true,
+              "label": true,
+              "md": true,
+              "required": true,
               "options": { "type": "array", "items": { "$ref": "#/$defs/option" }, "minItems": 1, "maxItems": 100 },
               "default": { "type": "string" }
             },
@@ -60,7 +68,11 @@
           "then": {
             "required": ["options"],
             "properties": {
-              "id": true, "type": true, "label": true, "md": true, "required": true,
+              "id": true,
+              "type": true,
+              "label": true,
+              "md": true,
+              "required": true,
               "options": { "type": "array", "items": { "$ref": "#/$defs/option" }, "minItems": 1, "maxItems": 100 },
               "default": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
               "min": { "type": "integer", "minimum": 0 },
@@ -73,7 +85,11 @@
           "if": { "properties": { "type": { "const": "text" } } },
           "then": {
             "properties": {
-              "id": true, "type": true, "label": true, "md": true, "required": true,
+              "id": true,
+              "type": true,
+              "label": true,
+              "md": true,
+              "required": true,
               "default": { "type": "string" },
               "placeholder": { "type": "string", "maxLength": 200 },
               "multiline": { "type": "boolean" },
@@ -86,7 +102,11 @@
           "if": { "properties": { "type": { "const": "number" } } },
           "then": {
             "properties": {
-              "id": true, "type": true, "label": true, "md": true, "required": true,
+              "id": true,
+              "type": true,
+              "label": true,
+              "md": true,
+              "required": true,
               "default": { "type": "number" },
               "min": { "type": "number" },
               "max": { "type": "number" },
@@ -103,12 +123,29 @@
       "additionalProperties": false,
       "properties": {
         "title": { "type": "string", "maxLength": 200 },
-        "name": { "type": "string", "minLength": 1, "maxLength": 60, "description": "Names the session: shown in the browser tab and the page's top bar. A later batch can change it." },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60,
+          "description": "Names the session: shown in the browser tab and the page's top bar. A later batch can change it."
+        },
         "md": { "$ref": "#/$defs/markdown", "description": "Markdown context shown above all questions." },
         "questions": { "type": "array", "items": { "$ref": "#/$defs/item" }, "minItems": 1, "maxItems": 50 },
-        "deadline": { "type": "integer", "minimum": 1, "maximum": 86400, "description": "Seconds the user has to answer. After that the page locks the batch and the client returns a timeout answer." },
-        "sent": { "type": "integer", "minimum": 0, "description": "Unix seconds when the batch was asked. Added by the client when there is a deadline." },
-        "mood": { "enum": ["confident", "excited", "nervous", "begging", "grumpy", "sheepish"], "description": "How the agent feels about asking. Changes the form's look." }
+        "deadline": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400,
+          "description": "Seconds the user has to answer. After that the page locks the batch and the client returns a timeout answer."
+        },
+        "sent": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Unix seconds when the batch was asked. Added by the client when there is a deadline."
+        },
+        "mood": {
+          "enum": ["confident", "excited", "nervous", "begging", "grumpy", "sheepish"],
+          "description": "How the agent feels about asking. Changes the form's look."
+        }
       }
     },
     "say": {
@@ -141,9 +178,21 @@
           "additionalProperties": { "type": "string", "maxLength": 10000 }
         },
         "note": { "type": "string", "maxLength": 10000 },
-        "delegated": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true, "description": "Questions the user left to the agent to decide." },
-        "timeout": { "type": "boolean", "description": "Set by the client when the deadline passed without an answer." },
-        "error": { "type": "string", "maxLength": 2000, "description": "Set by the browser when it could not show the question, e.g. it failed schema validation." }
+        "delegated": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" },
+          "uniqueItems": true,
+          "description": "Questions the user left to the agent to decide."
+        },
+        "timeout": {
+          "type": "boolean",
+          "description": "Set by the client when the deadline passed without an answer."
+        },
+        "error": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "Set by the browser when it could not show the question, e.g. it failed schema validation."
+        }
       }
     },
     "opening": {

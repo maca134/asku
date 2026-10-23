@@ -37,20 +37,26 @@ const messages = plaintexts.map(([dir, seq, pt], i) => {
 
 const hex = (b: Buffer) => b.toString("hex");
 const b64 = (b: Buffer) => b.toString("base64");
-console.log(JSON.stringify({
-  sid,
-  privA: hex(A.getPrivateKey()),
-  pubA: b64(A.getPublicKey()),
-  privB: hex(B.getPrivateKey()),
-  pubB: b64(B.getPublicKey()),
-  token: hex(token),
-  fragment: `${hex(sha(A.getPublicKey()))}.${hex(token)}`,
-  bind: b64(hmac(token, B.getPublicKey())),
-  // browser-created session: the browser (B) shares the link, the agent (A) joins
-  reverse: { fragment: `${hex(sha(B.getPublicKey()))}.${hex(token)}`, bind: b64(hmac(token, A.getPublicKey())) },
-  Z: hex(Z),
-  K: hex(K),
-  kEnc: hex(kEnc),
-  kMac: hex(kMac),
-  messages,
-}, null, 2));
+console.log(
+  JSON.stringify(
+    {
+      sid,
+      privA: hex(A.getPrivateKey()),
+      pubA: b64(A.getPublicKey()),
+      privB: hex(B.getPrivateKey()),
+      pubB: b64(B.getPublicKey()),
+      token: hex(token),
+      fragment: `${hex(sha(A.getPublicKey()))}.${hex(token)}`,
+      bind: b64(hmac(token, B.getPublicKey())),
+      // browser-created session: the browser (B) shares the link, the agent (A) joins
+      reverse: { fragment: `${hex(sha(B.getPublicKey()))}.${hex(token)}`, bind: b64(hmac(token, A.getPublicKey())) },
+      Z: hex(Z),
+      K: hex(K),
+      kEnc: hex(kEnc),
+      kMac: hex(kMac),
+      messages,
+    },
+    null,
+    2,
+  ),
+);

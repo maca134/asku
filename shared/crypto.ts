@@ -38,8 +38,14 @@ export async function deriveKeys(priv: CryptoKey, peerPub: Bytes): Promise<Keys>
   };
 }
 
-export async function seal(keys: Keys, sid: string, dir: Dir, seq: number, pt: string,
-  iv = crypto.getRandomValues(new Uint8Array(16))): Promise<Envelope> {
+export async function seal(
+  keys: Keys,
+  sid: string,
+  dir: Dir,
+  seq: number,
+  pt: string,
+  iv = crypto.getRandomValues(new Uint8Array(16)),
+): Promise<Envelope> {
   const ct = new Uint8Array(await subtle.encrypt({ name: "AES-CBC", iv }, keys.enc, te.encode(pt)));
   const tag = new Uint8Array(await subtle.sign("HMAC", keys.mac, tagInput(sid, dir, seq, iv, ct)));
   return { v: 1, seq, dir, iv: iv.toBase64(), ct: ct.toBase64(), tag: tag.toBase64() };
@@ -49,7 +55,9 @@ export async function seal(keys: Keys, sid: string, dir: Dir, seq: number, pt: s
 export async function open(keys: Keys, sid: string, dir: Dir, seq: number, env: Envelope): Promise<string> {
   const iv = Uint8Array.fromBase64(env.iv);
   const ct = Uint8Array.fromBase64(env.ct);
-  const ok = env.v === 1 && await subtle.verify("HMAC", keys.mac, Uint8Array.fromBase64(env.tag), tagInput(sid, dir, seq, iv, ct));
+  const ok =
+    env.v === 1 &&
+    (await subtle.verify("HMAC", keys.mac, Uint8Array.fromBase64(env.tag), tagInput(sid, dir, seq, iv, ct)));
   if (!ok) throw new Error("asku: bad tag");
   return td.decode(await subtle.decrypt({ name: "AES-CBC", iv }, keys.enc, ct));
 }
@@ -60,7 +68,8 @@ export const fragmentFor = async (pub: Bytes, token: Bytes) => `${(await sha256(
 // Joiner side of the trust flow: check the creator's pub against the URL fragment, return the token T.
 export async function checkFragment(fragment: string, pubA: Bytes): Promise<Bytes> {
   const [hash, token] = fragment.split(".");
-  if (hash !== (await sha256(pubA)).toHex() || !/^[0-9a-f]{32}$/.test(token ?? "")) throw new Error("asku: bad fragment");
+  if (hash !== (await sha256(pubA)).toHex() || !/^[0-9a-f]{32}$/.test(token ?? ""))
+    throw new Error("asku: bad fragment");
   return Uint8Array.fromHex(token);
 }
 

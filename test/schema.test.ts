@@ -28,7 +28,15 @@ test("bad shapes are rejected", () => {
 });
 
 test("deadline, mood, say and delegated", () => {
-  expect(valid("question", { ...q({ type: "confirm" }), deadline: 600, sent: 1761200000, mood: "begging", name: "shop: CSV export" })).toBe(true);
+  expect(
+    valid("question", {
+      ...q({ type: "confirm" }),
+      deadline: 600,
+      sent: 1761200000,
+      mood: "begging",
+      name: "shop: CSV export",
+    }),
+  ).toBe(true);
   expect(valid("question", { ...q({ type: "confirm" }), name: "" })).toBe(false);
   expect(valid("say", { say: "Tests **42/50**" })).toBe(true);
   expect(valid("answer", { answers: {}, delegated: ["x"], timeout: true })).toBe(true);

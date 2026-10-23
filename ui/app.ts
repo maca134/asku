@@ -11,9 +11,13 @@ async function main() {
   if (/^\/j\/[\w-]{22}$/.test(location.pathname)) {
     const link = location.hash ? location.href : "";
     history.replaceState(null, "", location.pathname);
-    return status("agent", "This link is for your agent", "Paste it into your chat with the AI agent, it can't be answered in a browser. The agent joins with the asku skill and sends its questions to the page you started from.",
+    return status(
+      "agent",
+      "This link is for your agent",
+      "Paste it into your chat with the AI agent, it can't be answered in a browser. The agent joins with the asku skill and sends its questions to the page you started from.",
       link && copyable(link, undefined, "Agent link"),
-      h("a", { className: "btn btn-secondary", href: "/" }, "What is asku?"));
+      h("a", { className: "btn btn-secondary", href: "/" }, "What is asku?"),
+    );
   }
   const m = location.pathname.match(/^\/a\/([\w-]{22})$/);
   if (!m) return landing();

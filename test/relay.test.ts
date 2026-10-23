@@ -53,7 +53,9 @@ test("full session: create, bind, q over SSE, a over long-poll, close", async ()
   expect(sse.headers.get("content-type")).toBe("text/event-stream");
   const reader = sse.body!.pipeThrough(new TextDecoderStream()).getReader();
   let feed = "";
-  const until = async (s: string) => { while (!feed.includes(s)) feed += (await reader.read()).value ?? ""; };
+  const until = async (s: string) => {
+    while (!feed.includes(s)) feed += (await reader.read()).value ?? "";
+  };
   await until("id: 1\n");
   expect(feed).toContain(`event: q\ndata: ${JSON.stringify(env("q", 1))}\n\n`);
   expect((await call("POST", `/s/${sid}/q`, env("q", 2), key)).status).toBe(204);
@@ -92,7 +94,11 @@ test("rate limits session creation per IP", async () => {
   const own = relay(); // its own relay, so the other tests keep their quota
   const statuses = [];
   for (let i = 0; i < LIMITS.createPerIp + 1; i++) {
-    const res = await fetch(`${own.server.url.href}s`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pub: v.pubA }) });
+    const res = await fetch(`${own.server.url.href}s`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pub: v.pubA }),
+    });
     statuses.push(res.status);
   }
   own.stop();
@@ -108,7 +114,11 @@ test("an IPv6 /64 shares one rate-limit quota", async () => {
   const own = relay({ ipHeader: "x-ip" });
   const statuses = [];
   for (let i = 0; i < LIMITS.createPerIp + 1; i++) {
-    const res = await fetch(`${own.server.url.href}s`, { method: "POST", headers: { "content-type": "application/json", "x-ip": `2001:db8:1:2::${i.toString(16)}` }, body: JSON.stringify({ pub: v.pubA }) });
+    const res = await fetch(`${own.server.url.href}s`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-ip": `2001:db8:1:2::${i.toString(16)}` },
+      body: JSON.stringify({ pub: v.pubA }),
+    });
     statuses.push(res.status);
   }
   own.stop();
@@ -118,9 +128,12 @@ test("an IPv6 /64 shares one rate-limit quota", async () => {
 test("relay-wide caps on sessions and stored bytes", async () => {
   const own = relay();
   const url = own.server.url.href.replace(/\/$/, "");
-  const post = (path: string, body: unknown, key?: string) => fetch(url + path, {
-    method: "POST", headers: { "content-type": "application/json", ...(key ? { authorization: `Bearer ${key}` } : {}) }, body: JSON.stringify(body),
-  });
+  const post = (path: string, body: unknown, key?: string) =>
+    fetch(url + path, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(key ? { authorization: `Bearer ${key}` } : {}) },
+      body: JSON.stringify(body),
+    });
   const saved = { ...LIMITS };
   try {
     const { sid, key } = await (await post("/s", { pub: v.pubA })).json();
@@ -139,7 +152,7 @@ test("caps open listeners per session", async () => {
   const { sid, key } = await create();
   await call("POST", `/s/${sid}/bind`, { pub: v.pubB, mac: v.bind });
   await call("POST", `/s/${sid}/q`, env("q", 1), key); // a feed's headers flush with its first event
-  const feeds =await Promise.all(Array.from({ length: LIMITS.listeners }, () => fetch(`${base}/s/${sid}/q`)));
+  const feeds = await Promise.all(Array.from({ length: LIMITS.listeners }, () => fetch(`${base}/s/${sid}/q`)));
   expect(feeds.every((f) => f.status === 200)).toBe(true);
   expect((await call("GET", `/s/${sid}/a?after=0`)).status).toBe(429);
   await Promise.all(feeds.map((f) => f.body!.cancel()));
@@ -148,7 +161,8 @@ test("caps open listeners per session", async () => {
 test("serves the page and hashed assets", async () => {
   const dist = mkdtempSync(`${tmpdir()}/asku-dist-`);
   mkdirSync(`${dist}/assets`);
-  for (const f of ["index", "how", "security", "demo", "install", "start", "terms", "app"]) writeFileSync(`${dist}/${f}.html`, f);
+  for (const f of ["index", "how", "security", "demo", "install", "start", "terms", "app"])
+    writeFileSync(`${dist}/${f}.html`, f);
   writeFileSync(`${dist}/robots.txt`, "User-agent: *");
   writeFileSync(`${dist}/assets/app-abc123.js`, "1");
   writeFileSync(`${dist}/skill.md`, "# asku");
@@ -172,7 +186,8 @@ test("serves the page and hashed assets", async () => {
     const md = await at("/skill.md");
     expect(await md.text()).toBe("# asku");
     expect(md.headers.get("content-type")).toBe("text/plain; charset=utf-8");
-    for (const p of ["/ask.sh", "/assets/nope.js", "/assets/..%2Findex.html", "/a/short", "/index.html"]) expect((await at(p)).status).toBe(404);
+    for (const p of ["/ask.sh", "/assets/nope.js", "/assets/..%2Findex.html", "/a/short", "/index.html"])
+      expect((await at(p)).status).toBe(404);
     const missing = await at("/nope");
     expect(missing.status).toBe(404);
     expect(missing.headers.get("content-type")).toContain("text/html");
