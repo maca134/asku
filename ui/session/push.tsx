@@ -26,7 +26,7 @@ export async function offerPush({ sid, state }: Session) {
   button.onclick = async () => {
     button.disabled = true;
     try {
-      await relay(sid, state.key, state.push ? null : await subscribe(serverKey));
+      await sendSubscription(sid, state.key, state.push ? null : await subscribe(serverKey));
       state.push = !state.push;
       await save(sid, state);
     } catch (error) {
@@ -53,7 +53,7 @@ async function subscribe(serverKey: string) {
 }
 
 // One browser subscription serves every session; turning one off only tells the relay to stop for that session.
-async function relay(sid: string, key: string, subscription: PushSubscription | null) {
+async function sendSubscription(sid: string, key: string, subscription: PushSubscription | null) {
   const res = await fetch(`/s/${sid}/push`, {
     method: subscription ? "PUT" : "DELETE",
     headers: { "content-type": "application/json", authorization: `Bearer ${key}` },

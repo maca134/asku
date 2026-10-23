@@ -24,7 +24,7 @@ import type { Answer, Question, Say } from "../types";
 import { chat } from "./chat";
 import { offerPush } from "./push";
 import { type Session, sendAnswer } from "./send";
-import { drop, received, rename, save } from "./storage";
+import { drop, markAsked, rename, save } from "./storage";
 
 export function listen(session: Session) {
   const { sid, keys, state } = session;
@@ -89,14 +89,13 @@ export function listen(session: Session) {
       if (valid) addToFeed(feedEvent("check", `Answered: ${batchName(message)}`));
       return;
     }
-    if (received(state, seq)) save(sid, state);
+    if (markAsked(state, seq)) save(sid, state);
     if (current?.sending) {
       deferred.push([seq, message]);
       return;
     }
-    const problem = !valid
-      ? schemaErrors()
-      : (conditionProblem(message.questions) ?? (current ? clash(current.form, message) : null));
+    if (!valid) return reject(seq, schemaErrors());
+    const problem = conditionProblem(message.questions) ?? (current ? clash(current.form, message) : null);
     if (problem) return reject(seq, problem);
     if (current) current.add([seq, message]);
     else current = new OpenForm([[seq, message]], send, formDone);
@@ -153,7 +152,7 @@ export function listen(session: Session) {
 
 // Why a batch can't join the open form. The agent client checks the same; this only guards the merged answer.
 function clash(form: Form, batch: Question) {
-  const ids = new Set(form.fields.map((f) => f.item.id));
+  const ids = new Set(form.fields.map((field) => field.item.id));
   const repeated = batch.questions.map((item) => item.id).filter((id) => ids.has(id));
   if (repeated.length) return `ids already in the open form: ${repeated.join(", ")}`;
   if (form.fields.length + batch.questions.length > 50) return "the open form would have more than 50 questions";

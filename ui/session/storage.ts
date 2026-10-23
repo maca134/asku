@@ -24,7 +24,7 @@ export function rename(state: State, name: string | undefined) {
   return true;
 }
 
-export function received(state: State, seq: number) {
+export function markAsked(state: State, seq: number) {
   state.asked ??= [];
   if (state.asked.includes(seq)) return false;
   state.asked.push(seq);
@@ -64,14 +64,19 @@ const settle = <T>(pending: IDBRequest<T>) =>
     pending.onerror = () => reject(pending.error);
   });
 
-export const load = async (sid: string) =>
-  settle<State | undefined>((await open("readonly")).get(sid)).catch(() => undefined);
-export const drop = async (sid: string) => settle((await open("readwrite")).delete(sid)).catch(() => {});
+export const load = (sid: string) =>
+  open("readonly")
+    .then((store) => settle<State | undefined>(store.get(sid)))
+    .catch(() => undefined);
+export const drop = (sid: string) =>
+  open("readwrite")
+    .then((store) => settle(store.delete(sid)))
+    .catch(() => {});
 
 // Another tab or the service worker may have saved since this copy was loaded: keep the seqs it recorded.
 export function merge(state: State, stored: State | undefined) {
   for (const seq of stored?.answered ?? []) if (!state.answered.includes(seq)) state.answered.push(seq);
-  for (const seq of stored?.asked ?? []) received(state, seq);
+  for (const seq of stored?.asked ?? []) markAsked(state, seq);
 }
 
 // Read, merge and write in one transaction, so no other save lands in between.

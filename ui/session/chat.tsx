@@ -52,8 +52,8 @@ export async function chat({ sid, keys, state }: Session) {
     error.textContent = "";
     try {
       await task();
-    } catch (e) {
-      error.textContent = `Not sent: ${(e as Error).message}`;
+    } catch (failure) {
+      error.textContent = `Not sent: ${(failure as Error).message}`;
     } finally {
       sendButton.disabled = stopButton.disabled = false;
     }

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { merge, received, rename, type State, summary } from "../ui/session/storage";
+import { markAsked, merge, rename, type State, summary } from "../ui/session/storage";
 
 const fresh = (): State => ({ priv: {} as CryptoKey, key: "k", answered: [] });
 
@@ -23,8 +23,8 @@ test("a form without a name leaves the session as it was", () => {
 
 test("a form stays waiting until an answer covers it", () => {
   const state = fresh();
-  expect(received(state, 1)).toBe(true);
-  expect(received(state, 1)).toBe(false);
+  expect(markAsked(state, 1)).toBe(true);
+  expect(markAsked(state, 1)).toBe(false);
   expect(summary("sid", state).waiting).toBe(true);
   state.answered.push(1);
   expect(summary("sid", state).waiting).toBe(false);

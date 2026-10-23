@@ -1,7 +1,8 @@
 // asku relay: stores opaque envelopes, never sees plaintext. API in README "Relay API".
 import type { Server } from "bun";
+import type { Direction } from "../shared/crypto";
 import { type Subscription, sendPush, type Vapid } from "./push";
-import { type Direction, openStore, type Session } from "./store";
+import { openStore, type Session } from "./store";
 
 export const LIMITS = {
   body: 256 * 1024,
@@ -35,40 +36,34 @@ const empty = (status = 204) => new Response(null, { status });
 const envelopes = (rows: { envelope: string }[]) =>
   new Response(`[${rows.map((row) => row.envelope).join(",")}]`, { headers: { "content-type": "application/json" } });
 
-function decodeBase64(value: unknown, length?: number) {
-  if (typeof value !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return null;
+type Alphabet = "base64" | "base64url";
+const ALPHABETS = { base64: /^[A-Za-z0-9+/]+={0,2}$/, base64url: /^[\w-]+$/ };
+
+function decodeBase64(value: unknown, length?: number, alphabet: Alphabet = "base64") {
+  if (typeof value !== "string" || !ALPHABETS[alphabet].test(value)) return null;
   try {
-    const bytes = Uint8Array.fromBase64(value);
+    const bytes = Uint8Array.fromBase64(value, { alphabet });
     return length === undefined || bytes.length === length ? bytes : null;
   } catch {
     return null;
   }
 }
-const isBase64 = (value: unknown, length?: number): value is string => decodeBase64(value, length) !== null;
-const isPublicKey = (value: unknown): value is string => decodeBase64(value, 65)?.[0] === 4;
-
-function decodeBase64url(value: unknown, length: number) {
-  if (typeof value !== "string" || !/^[\w-]+$/.test(value)) return null;
-  try {
-    const bytes = Uint8Array.fromBase64(value, { alphabet: "base64url" });
-    return bytes.length === length ? bytes : null;
-  } catch {
-    return null;
-  }
-}
+const isBase64 = (value: unknown, length?: number, alphabet?: Alphabet): value is string =>
+  decodeBase64(value, length, alphabet) !== null;
+const isPublicKey = (value: unknown, alphabet?: Alphabet): value is string =>
+  decodeBase64(value, 65, alphabet)?.[0] === 4;
 
 // Only the big browsers' push services: the endpoint comes from the browser, so it mustn't aim the relay elsewhere.
 export const PUSH_SERVICES =
   /^https:\/\/([\w-]+\.)*(fcm\.googleapis\.com|push\.services\.mozilla\.com|notify\.windows\.com|push\.apple\.com)\//;
 
-// A PushSubscription's toJSON(), reduced to what sending needs.
 function validSubscription(body: Body | null, services: RegExp): Subscription | null {
   const endpoint = body?.endpoint;
   const keys = body?.keys as Body | undefined;
   if (typeof endpoint !== "string" || endpoint.length > 1024 || !services.test(endpoint)) return null;
   const { p256dh, auth } = keys ?? {};
-  if (decodeBase64url(p256dh, 65)?.[0] !== 4 || !decodeBase64url(auth, 16)) return null;
-  return { endpoint, p256dh: p256dh as string, auth: auth as string };
+  if (!isPublicKey(p256dh, "base64url") || !isBase64(auth, 16, "base64url")) return null;
+  return { endpoint, p256dh, auth };
 }
 
 // IPv6 clients usually get a whole /64, so it shares one rate-limit quota.

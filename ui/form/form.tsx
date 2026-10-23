@@ -79,16 +79,16 @@ export function buildForm(first: Question) {
       form.classList.add(`mood-${batch.mood}`);
     }
     const section = withHeading ? heading(batch, "qform-sec", (title) => <h2>{title}</h2>) : null;
-    const elements = [...(section ? [section] : []), ...added.map((f) => f.element)];
+    const elements = [...(section ? [section] : []), ...added.map((question) => question.element)];
     noteField.before(...elements);
     refresh();
     return { elements, fields: added };
   };
 
   const remove = (removed: Field[]) => {
-    for (const f of removed) {
-      fields.splice(fields.indexOf(f), 1);
-      f.element.remove();
+    for (const question of removed) {
+      fields.splice(fields.indexOf(question), 1);
+      question.element.remove();
     }
     refresh();
   };
@@ -100,25 +100,25 @@ export function buildForm(first: Question) {
     const answer: Answer = { answers: {}, skipped: [], comments: {}, note: note.value.trim() };
     const problems: string[] = [];
     const states = visibility(fields);
-    for (const f of only) {
-      const id = f.item.id;
+    for (const question of only) {
+      const id = question.item.id;
       const state = states.get(id);
-      if (state === "shown" && f.comment.value.trim()) answer.comments[id] = f.comment.value.trim();
-      if (state !== "shown" || f.delegated()) {
-        f.element.classList.remove("invalid");
-        f.error.textContent = "";
+      if (state === "shown" && question.comment.value.trim()) answer.comments[id] = question.comment.value.trim();
+      if (state !== "shown" || question.delegated()) {
+        question.element.classList.remove("invalid");
+        question.error.textContent = "";
         if (state === "hidden") answer.skipped.push(id);
         else answer.delegated = [...(answer.delegated ?? []), id];
         continue;
       }
-      const value = f.value();
-      const problem = value === undefined ? (f.item.required ? "required" : null) : f.check();
+      const value = question.value();
+      const problem = value === undefined ? (question.item.required ? "required" : null) : question.check();
       const shown = submitted && !!problem;
-      f.element.classList.toggle("invalid", shown);
-      for (const input of f.element.querySelectorAll("[aria-describedby]"))
+      question.element.classList.toggle("invalid", shown);
+      for (const input of question.element.querySelectorAll("[aria-describedby]"))
         input.setAttribute("aria-invalid", String(shown));
-      f.error.textContent = problem && submitted ? capitalise(problem) : "";
-      if (problem) problems.push(`${f.item.label}: ${problem}`);
+      question.error.textContent = problem && submitted ? capitalise(problem) : "";
+      if (problem) problems.push(`${question.item.label}: ${problem}`);
       else if (value === undefined) answer.skipped.push(id);
       else answer.answers[id] = value;
     }
@@ -130,14 +130,14 @@ export function buildForm(first: Question) {
   // A dependent left to the agent with its question is hidden too: nothing for the user to do there.
   const refresh = () => {
     const states = visibility(fields);
-    const shown = fields.filter((f) => {
-      f.element.hidden = states.get(f.item.id) !== "shown";
-      return !f.element.hidden;
+    const shown = fields.filter((question) => {
+      question.element.hidden = states.get(question.item.id) !== "shown";
+      return !question.element.hidden;
     });
-    shown.forEach((f, i) => {
-      f.element.querySelector(".q-num")!.textContent = String(i + 1);
+    shown.forEach((question, i) => {
+      question.element.querySelector(".q-num")!.textContent = String(i + 1);
     });
-    const answered = shown.filter((f) => f.delegated() || f.value() !== undefined).length;
+    const answered = shown.filter((question) => question.delegated() || question.value() !== undefined).length;
     progress.textContent = `${answered} of ${shown.length} answered`;
     if (submitted) collect(false);
   };
@@ -148,4 +148,4 @@ export function buildForm(first: Question) {
   return { form, fields, note, noteField, error, sendButton, sendLabel, collect, append, remove };
 }
 
-const count = (n: number) => (n === 1 ? "1 answer" : `${n} answers`);
+const count = (total: number) => (total === 1 ? "1 answer" : `${total} answers`);
