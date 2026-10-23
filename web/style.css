@@ -9,7 +9,7 @@
   --fg: #0b0b10;
   --fg-2: #3a3a45;
   --muted: #62626e;
-  --faint: #8b8b97;
+  --faint: #6e6e7a; /* 4.5:1 on white: hints carry constraints users need to read */
   --line: #e5e5eb;
   --line-2: #d4d4dc;
   --accent: #5b5bf6;
@@ -37,7 +37,7 @@
     --fg: #ededf2;
     --fg-2: #c8c8d0;
     --muted: #9a9aa6;
-    --faint: #70707c;
+    --faint: #8a8a96;
     --line: #22222a;
     --line-2: #32323c;
     --accent: #8080ff;
@@ -305,7 +305,7 @@ h3 { letter-spacing: -.012em; }
 .copy-prompt { padding: .5rem 0; font: 650 .875rem/1.5 var(--mono); color: var(--accent-text); user-select: none; }
 .copy .copy-text { flex: 1; min-width: 0; padding: .5rem 0; font: .875rem/1.5 var(--mono); color: var(--fg); background: none; border: 0; border-radius: 0; overflow-wrap: anywhere; user-select: all; }
 .copy-btn {
-  flex: none; display: inline-flex; align-items: center; gap: .35rem; padding: .45rem .7rem; cursor: pointer;
+  flex: none; display: inline-flex; align-items: center; gap: .35rem; padding: .45rem .7rem; min-height: 2.5rem; cursor: pointer;
   font: inherit; font-size: .82rem; font-weight: 600; color: var(--fg-2); background: var(--surface); border: 1px solid var(--line-2); border-radius: 7px;
 }
 .copy-btn:hover { background: var(--bg-2); }
@@ -425,12 +425,15 @@ fieldset.q.invalid .q-num { background: var(--err); color: #fff; }
 
 details.comment { margin-top: .7em; }
 details.comment summary {
-  display: inline-flex; align-items: center; gap: .4em; margin-left: -.45em; padding: .3em .55em .3em .45em;
+  display: inline-flex; align-items: center; gap: .4em; margin-left: -.45em; padding: .3em .55em .3em .45em; min-height: 2.5rem;
   font-size: .85em; font-weight: 560; color: var(--muted); border-radius: .5em; cursor: pointer; list-style: none;
 }
 details.comment summary::-webkit-details-marker { display: none; }
 details.comment summary:hover { color: var(--fg); background: var(--bg-2); }
-details.comment[open] summary { color: var(--accent-text); }
+details.comment[open] summary, details.comment.has summary { color: var(--accent-text); }
+.clear { display: none; margin: .55em 0 0; padding: .4em .1em; min-height: 2.5rem; font: inherit; font-size: .85em; font-weight: 560; color: var(--muted); background: none; border: 0; cursor: pointer; text-decoration: underline; text-underline-offset: .2em; }
+.q:has(input:checked) > .clear { display: inline-block; }
+html:has(.qform) { scroll-padding-bottom: 6rem; } /* keep a focused field clear of the sticky submit bar */
 details.comment summary .icon { width: 1.1em; height: 1.1em; }
 details.comment textarea { margin-top: .45em; font-size: .95em; }
 .note-label { display: flex; align-items: center; gap: .5em; margin-bottom: .7em; font-weight: 640; font-size: 1.02em; }

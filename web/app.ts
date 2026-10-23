@@ -100,7 +100,13 @@ function stateEl(kind: Kind, title: string, detail?: string, ...extra: Kid[]) {
     detail ? p(detail, "state-detail") : null,
     ...extra);
 }
-const status = (kind: Kind, title: string, detail?: string, ...extra: Kid[]) => app.replaceChildren(shell([stateEl(kind, title, detail, ...extra)]));
+// After swapping screens, move focus to the new heading so keyboard and screen-reader users land on it.
+const show = (...kids: Kid[]) => {
+  app.replaceChildren(shell(kids));
+  const h1 = app.querySelector<HTMLElement>("h1");
+  if (h1) { h1.tabIndex = -1; h1.focus({ preventScroll: true }); }
+};
+const status = (kind: Kind, title: string, detail?: string, ...extra: Kid[]) => show(stateEl(kind, title, detail, ...extra));
 const live = (text: string) => h("p", { className: "live" }, h("span", { className: "pulse" }), text);
 const home = () => h("a", { className: "btn btn-secondary", href: "/" }, `Go to ${location.host}`);
 const startNew = () => h("a", { className: "btn btn-secondary", href: "/start" }, "Start a new session");
@@ -151,7 +157,7 @@ const range = (it: Item) => [
 ].filter(Boolean).join(" · ");
 
 function field(it: Item, i: number) {
-  const msg = h("p", { className: "q-err" });
+  const msg = h("p", { className: "q-err", id: `q-err-${it.id}` });
   const box = h("fieldset", { className: `q q-${it.type}` },
     h("legend", {},
       h("span", { className: "q-num", textContent: String(i + 1), ariaHidden: "true" }),
@@ -197,7 +203,8 @@ function field(it: Item, i: number) {
       break;
     }
     case "number": {
-      const el = h("input", { type: "number", inputMode: "decimal", className: "input", ariaLabel: it.label, value: it.default !== undefined ? String(it.default) : "" });
+      // iOS's decimal keypad has no minus key
+      const el = h("input", { type: "number", inputMode: it.min !== undefined && it.min >= 0 ? "decimal" : "text", className: "input", ariaLabel: it.label, value: it.default !== undefined ? String(it.default) : "" });
       if (it.min !== undefined) el.min = String(it.min);
       if (it.max !== undefined) el.max = String(it.max);
       el.step = it.step !== undefined ? String(it.step) : "any";
@@ -216,9 +223,19 @@ function field(it: Item, i: number) {
     }
   }
 
+  // a radio can't be unticked: optional ones get a way back to "skipped"
+  if (!it.required && (it.type === "confirm" || it.type === "single")) {
+    box.append(h("button", { type: "button", className: "clear", textContent: "Clear answer", onclick: () => {
+      box.querySelectorAll<HTMLInputElement>("input:checked").forEach((x) => (x.checked = false));
+      box.dispatchEvent(new Event("change", { bubbles: true }));
+    } }));
+  }
+  box.querySelectorAll("input, textarea").forEach((x) => x.setAttribute("aria-describedby", msg.id));
   const comment = h("textarea", { rows: 2, className: "input", placeholder: "Comment for the agent", ariaLabel: `Comment on “${it.label}”` });
-  const det = h("details", { className: "comment" }, h("summary", {}, icon("message"), h("span", { textContent: "Add a comment" })), comment);
+  const sumText = h("span", { textContent: "Add a comment" });
+  const det = h("details", { className: "comment" }, h("summary", {}, icon("message"), sumText), comment);
   det.ontoggle = () => { if (det.open) comment.focus(); };
+  comment.oninput = () => { sumText.textContent = comment.value.trim() ? "Comment added" : "Add a comment"; det.classList.toggle("has", !!comment.value.trim()); };
   box.append(msg, det);
   return { it, el: box, value: value!, check, comment, msg };
 }
@@ -230,7 +247,7 @@ function buildForm(q: Question) {
   const err = h("div", { className: "form-err", role: "alert" });
   const label = h("span", { textContent: "Send answers" });
   const btn = h("button", { type: "submit", className: "btn btn-primary btn-send" }, icon("lock"), label);
-  const progress = h("span", { className: "progress", ariaLive: "polite" });
+  const progress = h("span", { className: "progress" });
   const tail = h("label", { className: "q note" }, h("span", { className: "note-label" }, "Note for the agent", h("span", { className: "opt-tag", textContent: "Optional" })), note);
   const form = h("form", { className: "qform", noValidate: true },
     q.title || q.md ? h("header", { className: "qform-head" }, q.title ? h("h1", { textContent: q.title }) : null, q.md ? md(q.md, "context") : null) : null,
@@ -263,6 +280,7 @@ function buildForm(q: Question) {
       const v = f.value();
       const bad = v === undefined ? (f.it.required ? "required" : null) : f.check();
       f.el.classList.toggle("invalid", tried && !!bad);
+      f.el.querySelectorAll("[aria-describedby]").forEach((x) => x.setAttribute("aria-invalid", String(tried && !!bad)));
       f.msg.textContent = tried && bad ? bad[0].toUpperCase() + bad.slice(1) : "";
       if (bad) problems.push(`${f.it.label}: ${bad}`);
       else if (v === undefined) a.skipped.push(f.it.id);
@@ -349,6 +367,7 @@ function render(sid: string, keys: Keys, st: State, batches: Batch[], done: () =
       const r = f.collect(true, fields);
       if (r.problems.length) {
         f.form.querySelector(".invalid")?.scrollIntoView({ behavior: smooth(), block: "start" });
+        f.form.querySelector<HTMLElement>(".invalid [aria-describedby]")?.focus({ preventScroll: true });
         return;
       }
       if (all && unseen) { // don't send questions the user hasn't seen as "skipped"
@@ -365,7 +384,7 @@ function render(sid: string, keys: Keys, st: State, batches: Batch[], done: () =
       await send(sid, keys, st, seqs, { seqs, ...a });
       if (all) {
         seen.disconnect();
-        app.replaceChildren(shell([sentState()]));
+        show(sentState());
       } else {
         for (const p of ps) {
           p.foot.replaceWith(h("p", { className: "batch-sent" }, icon("check"), `Sent ${p.fields.length === 1 ? "1 answer" : `${p.fields.length} answers`}`));
@@ -405,7 +424,7 @@ function render(sid: string, keys: Keys, st: State, batches: Batch[], done: () =
   part(seq, f.fields.slice());
   rest.forEach(o.add);
   f.form.onsubmit = (e) => { e.preventDefault(); submit(parts); };
-  app.replaceChildren(shell([f.form]));
+  show(f.form);
   scrollTo(0, 0);
   if (document.hidden) document.title = "● asku: question waiting";
   return o;
@@ -566,13 +585,13 @@ function startCard() {
 async function waitForAgent(sid: string, st: State) {
   const token = Uint8Array.fromHex(st.T!);
   const link = `${location.origin}/j/${sid}#${await fragmentFor(Uint8Array.fromBase64(st.pubB!), token)}`;
-  app.replaceChildren(shell([h("section", { className: "panel" },
+  show(h("section", { className: "panel" },
     h("div", { className: "state-icon agent" }, icon("link")),
     h("h1", { textContent: "Give this link to your agent" }),
     p("Paste it into your chat with the agent. It joins with the asku skill (`ask join <link>`) and asks its questions right here.", "state-detail"),
     copyable(link, undefined, "Agent link"),
     live("Waiting for your agent to join…"),
-    h("div", { className: "tip" }, h("p", { className: "card-label", textContent: "Agent doesn't have the skill yet? Tell it:" }), copyable(installLine(), "›")))]));
+    h("div", { className: "tip" }, h("p", { className: "card-label", textContent: "Agent doesn't have the skill yet? Tell it:" }), copyable(installLine(), "›"))));
 
   for (;;) {
     const res = await fetch(`/s/${sid}/bind`).catch(() => null);
@@ -646,7 +665,10 @@ function listen(sid: string, keys: Keys, st: State) {
       h("div", { className: "state-actions" }, h("a", { className: "btn btn-primary", href: "/start" }, "Start a new session"), home()));
   });
   es.onerror = () => {
-    if (es.readyState === EventSource.CLOSED) status("error", "This session has ended or expired", undefined, home());
+    if (es.readyState === EventSource.CLOSED) return status("error", "This session has ended or expired", undefined, startNew(), home());
+    // the browser reconnects by itself; say so instead of a "Connected" that isn't
+    const l = app.querySelector(".live");
+    if (l?.lastChild) { l.lastChild.textContent = "Reconnecting…"; es.addEventListener("open", () => (l.lastChild!.textContent = "Waiting for the agent's question…"), { once: true }); }
   };
 }
 
@@ -872,7 +894,7 @@ async function main() {
   let st = await load(sid);
   if (st && !st.pubA) return waitForAgent(sid, st);
   if (!st) {
-    if (!frag) return status("error", "This link is incomplete", "Or it was opened in another browser. Ask the agent for a new link.", home());
+    if (!frag) return status("error", "This link is incomplete", "Open it in the browser where you first opened it, or ask the agent for a new link.", home());
     status("wait", "Verifying link…", "Checking the agent's key against the link.");
     const res = await fetch(`/s/${sid}`);
     if (res.status === 404) return status("error", "This session has ended or expired", "Ask the agent for a new link.", home());
@@ -886,7 +908,7 @@ async function main() {
     }
     const b = await newKeyPair();
     const res2 = await post(`/s/${sid}/bind`, { pub: b.pub.toBase64(), mac: await bindTag(token, b.pub) });
-    if (res2.status === 409) return status("error", "Already opened elsewhere", "This link was opened in another browser or device. Continue there, or ask the agent for a new link.");
+    if (res2.status === 409) return status("error", "Already opened elsewhere", "This link was opened in another browser or device. Continue there, or ask the agent for a new link.", home());
     if (!res2.ok) return status("error", "Could not join the session", `The relay said ${res2.status}.`, home());
     st = { priv: b.priv, pubA: pub, key: (await res2.json()).key, answered: [] };
     await save(sid, st);
