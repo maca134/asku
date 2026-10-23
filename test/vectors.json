@@ -1,0 +1,52 @@
+{
+  "sid": "vSid0123456789ab",
+  "privA": "da103e84dc3a49b12982aaf7ca79dc3b6381b02fb3512d04cd746fe5819ef093",
+  "pubA": "BE3Q668MkIM0JiZp7WQGLCE+lTh0c7wVqJDrsAEcysHq/FFrSQPCpwCOXDIakUQ5VQl6TpZZtx6fAaFz4Sud9Kg=",
+  "privB": "baba2dab317727a3fdd56dbc0cabbbfeb3586a7474853518a9c9ce711da537b5",
+  "pubB": "BHs3eEkNOkppF3Wiij2csQzCIbqjwKWhSrDij1D9YDtjmH614yRGpvo9Jz5pnU1+xCEpMHrOKNX9Etn2H8Otwc4=",
+  "token": "3c39eaeac4ed22d1e7cc01ffd26aa983",
+  "fragment": "00f5a3e3e0105583a8fe6712076bbeca28e16e95256d7232ec52c4fe66c65a24.3c39eaeac4ed22d1e7cc01ffd26aa983",
+  "bind": "Tr3sdLzymBu3WSNJD8212d9T/6wIrQCsNagOjFnxUu8=",
+  "Z": "2432d1c8725757e47f8df50958d3e06ec305e90d93a4802111929e0256cb61cf",
+  "K": "fcd5f70fea3ae578833a95fe83da69d83f270c3e191a98ddd46e5eab94a4f3c9",
+  "kEnc": "0720e85f273929761359d96401ed357325924bce10242c7cba9c760eb2b9f54a",
+  "kMac": "db68e5e2b77239719b24211b880ffe8037505a1e5dc209d88595d645e5aae64f",
+  "messages": [
+    {
+      "v": 1,
+      "seq": 1,
+      "dir": "q",
+      "iv": "haB6G7cgivOwoBHj90IIJQ==",
+      "ct": "oMgXJzqgwiVHqqkTCd5O3CUEGQzNcza6+xu2aNFMKOOCupMOG3+O44AemogOvmOQ0kq28jqe9tGjpbM2sgeTyYt1PUNymNMfu5eKkxtNEdck66jcjkKtsXISqZWlAC7pUTw8nkXPZ6tGKPQcNsruSsLkWqXOt0TyeLeI4jxMrdUcwU0ohyrKb7WQaHy9gACuog3LQb/XVw72V7yvyvIYq3i3DP+H14r/YOs1vWcx+G/SqXuGe7xQ3Ru90XXK/mu+HwuG/pLR+78jn///6Bb/aWhr6fMeGi0dc4pOPS2OOicOqmU3Ji66T64TVigNITH1h1Hftr/sccnBDxOFvb9TpnzdBRo9BPnTsV29BgPb/qnKnrGmmgIHeB04VpLlnhUkfWB2bBSG3t4FT29i/3rT+N1YvQoggRyGOxjm/osMW7oRZtZisQ14xhVfEpKzswcpxrL105q4lOkRD9gh343CMEseUhMsVKQWOoJHwSZTP6Qyyq2unl1EgWd9/bdUrv6x9adccuuCn4ysvry/3+pgVN8lJAXX7MODKwZjs5lfUQefcKH4QZwbIEAK9k53aLd7wMGiVtEJwScsZX3HohR1pffCrBcha93HDYX6CDvh4sBp3IAw0Ahs4IaufqMXVkWES4N8lMf0ALDjTgZPBFNY/EX7yoeW1s7ZUQ5ShMFrng1M7OjQNHmSV6I46Yq/5FLYcRjPxjJGZhUV6yXuruOBFdwuihT/SCAqpLapAU1N4k7NgEjUzib2iC1YnxWx5faK",
+      "tag": "bmRpD8IABl0wjROb2neKSykul0ZsR24BRVfKXgKy9z0=",
+      "pt": "{\"title\":\"Deploy plan\",\"md\":\"About to deploy **v2.3** to production.\",\"questions\":[{\"id\":\"go\",\"type\":\"confirm\",\"label\":\"Deploy now?\",\"required\":true},{\"id\":\"env\",\"type\":\"single\",\"label\":\"Target\",\"options\":[\"staging\",{\"value\":\"prod\",\"label\":\"Production\",\"md\":\"Live traffic\"}],\"default\":\"staging\"},{\"id\":\"checks\",\"type\":\"multi\",\"label\":\"Run checks\",\"options\":[\"lint\",\"test\",\"e2e\"],\"min\":1},{\"id\":\"why\",\"type\":\"text\",\"label\":\"Release notes\",\"multiline\":true,\"placeholder\":\"Optional\"},{\"id\":\"pct\",\"type\":\"number\",\"label\":\"Canary %\",\"min\":0,\"max\":100,\"step\":5,\"default\":10}]}"
+    },
+    {
+      "v": 1,
+      "seq": 1,
+      "dir": "a",
+      "iv": "uX+p0Osh/vmw3OaKgnNLDA==",
+      "ct": "2JGt9XuNEguNxW+kHaJizPM8rwt0DXdaHDW1z0qE54lnZ9PbGVOLYP0zLps+4Fz35a3KbKJYVlN351mvVAL/9PGTtD96vu6++NWy+e8du+CeK5GDuUUq+VLgO5GnLfBi",
+      "tag": "rHqa4wjEBDIUSFYpXctb1vzcR0DV6GX2b0aXP+kaPmU=",
+      "pt": "{\"answers\":{\"go\":true},\"skipped\":[],\"comments\":{},\"note\":\"héllo — 日本語 🚀\"}"
+    },
+    {
+      "v": 1,
+      "seq": 2,
+      "dir": "q",
+      "iv": "NJ+BpBSg7NA96KZzBsVQ5A==",
+      "ct": "KPQ5lYZMYaKrqwt+I3l+GPV7gw04ieWz5X5IL1K/Vd9ToVhyXYzpnJnp7IHLQlp4",
+      "tag": "WU8GO86OVs1oz7M71rWa4PSqClTDnef6WorUogK/WJk=",
+      "pt": "0123456789abcdef0123456789abcdef"
+    },
+    {
+      "v": 1,
+      "seq": 2,
+      "dir": "a",
+      "iv": "OCBUCdeS1S58X4zZqL9LfQ==",
+      "ct": "QJhrKvl9oK+G1DoQoaL16Q==",
+      "tag": "I8O1tIsRWyEyAEGIAO1/DZpNbru1AyoYp3lgW8v1kac=",
+      "pt": "x"
+    }
+  ]
+}

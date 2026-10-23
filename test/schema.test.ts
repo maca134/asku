@@ -1,0 +1,24 @@
+import { test, expect } from "bun:test";
+import Ajv from "ajv/dist/2020";
+import schema from "../schema.json";
+import question from "../examples/question.json";
+import answer from "../examples/answer.json";
+
+const ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
+ajv.addSchema(schema);
+const valid = (def: string, x: unknown) => ajv.validate(`${schema.$id}#/$defs/${def}`, x);
+const q = (item: object) => ({ questions: [{ id: "x", label: "L", ...item }] });
+
+test("examples are valid", () => {
+  expect(valid("question", question)).toBe(true);
+  expect(valid("answer", answer)).toBe(true);
+});
+
+test("bad shapes are rejected", () => {
+  expect(valid("question", q({ type: "single" }))).toBe(false); // options required
+  expect(valid("question", q({ type: "confirm", options: ["a"] }))).toBe(false);
+  expect(valid("question", q({ type: "slider" }))).toBe(false);
+  expect(valid("question", q({ type: "text", id: "bad id" }))).toBe(false);
+  expect(valid("answer", { answers: { x: { nested: 1 } } })).toBe(false);
+  expect(valid("answer", { answers: {}, extra: 1 })).toBe(false);
+});

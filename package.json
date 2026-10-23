@@ -1,0 +1,12 @@
+{
+  "name": "asku",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "vectors": "bun test/gen-vectors.ts > test/vectors.json"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1"
+  }
+}

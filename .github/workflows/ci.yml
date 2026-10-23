@@ -1,0 +1,22 @@
+name: ci
+on: [push, pull_request]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      # Windows: Git Bash, not the WSL bash.exe in System32
+      ASKU_BASH: ${{ runner.os == 'Windows' && 'C:\Program Files\Git\bin\bash.exe' || 'bash' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - if: runner.os == 'macOS'
+        run: echo "$(brew --prefix openssl@3)/bin" >> "$GITHUB_PATH"
+      - run: openssl version
+        shell: bash
+      - run: bun install --frozen-lockfile
+      - run: bun test
