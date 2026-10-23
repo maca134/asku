@@ -187,6 +187,14 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) docu
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// Read-only text with a copy button.
+function copyable(text: string) {
+  const field = h("input", { type: "text", readOnly: true, value: text, onfocus: () => field.select() });
+  const copy = h("button", { type: "button", textContent: "Copy" });
+  copy.onclick = () => navigator.clipboard.writeText(text).then(() => (copy.textContent = "Copied"), () => field.select());
+  return h("div", { className: "link" }, field, copy);
+}
+
 // ---- reverse flow: the user starts a session here and hands the agent a link
 function landing() {
   const note = h("textarea", { rows: 4, maxLength: 10000, placeholder: "What should the agent know or do? (optional)" });
@@ -215,20 +223,20 @@ function landing() {
       btn.disabled = false;
     }
   };
-  app.replaceChildren(form);
+  app.replaceChildren(form, h("div", { className: "card" },
+    h("h2", { textContent: "Install the skill" }),
+    h("p", { textContent: "Tell your agent:" }),
+    copyable(`Install the skill at ${location.origin}/skill.md`)));
 }
 
 async function waitForAgent(sid: string, st: State) {
   const token = Uint8Array.fromHex(st.T!);
   const link = `${location.origin}/j/${sid}#${await fragmentFor(Uint8Array.fromBase64(st.pubB!), token)}`;
-  const field = h("input", { type: "text", readOnly: true, value: link, onfocus: () => field.select() });
-  const copy = h("button", { type: "button", textContent: "Copy" });
-  copy.onclick = () => navigator.clipboard.writeText(link).then(() => (copy.textContent = "Copied"), () => field.select());
   const wait = h("p", { className: "status", textContent: "Waiting for your agent to join…" });
   app.replaceChildren(h("div", { className: "card" },
     h("h1", { textContent: "Give this link to your agent" }),
     h("p", { textContent: "Paste it into your chat with the agent. It needs the asku skill; it runs `ask.sh join <link>`." }),
-    h("div", { className: "link" }, field, copy),
+    copyable(link),
     wait));
 
   for (;;) {

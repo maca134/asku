@@ -10,7 +10,13 @@ Everything is encrypted on your machine, the relay never sees plaintext.
 
 ## Setup
 
-Pick the script for your OS and keep it somewhere stable (the skill folder, or `~/.asku/`):
+If `ask.sh` or `ask.ps1` is next to this file, use that one and skip setup. Never re-download it unless the user asks.
+
+**Installing.** If the user asks you to install this skill, create an `asku` folder in your skills directory,
+save https://asku.dev/skill.md there as `SKILL.md`, and download the script for your OS next to it (below).
+Installing again updates both; `ask version` shows the client version.
+
+Otherwise, download the script for your OS and keep it somewhere stable (e.g. `~/.asku/`):
 
 ```bash
 curl -fsSLO https://asku.dev/ask.sh && chmod +x ask.sh      # Linux/macOS: needs bash, curl, OpenSSL >= 1.1.1
