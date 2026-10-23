@@ -159,14 +159,22 @@ const MOODS: Record<Mood, [string, string]> = {
 };
 const moodEl = (m: Mood) => h("p", { className: "mood" }, h("span", { className: "mood-face", textContent: MOODS[m][0], ariaHidden: "true" }), MOODS[m][1]);
 
-// ---- the agent's one-way updates (`ask say`), listed under whatever the page shows
-const feed = h("section", { className: "feed", ariaLabel: "Updates from the agent" }, h("h2", { textContent: "From the agent" }), h("ol", { ariaLive: "polite" }));
-function say(text: string) {
-  const ol = feed.lastChild as HTMLOListElement;
-  ol.append(h("li", {}, md(text)));
-  while (ol.childElementCount > 30) ol.firstChild!.remove();
-  if (!feed.isConnected) app.querySelector(".shell-main")?.append(feed);
+// ---- the session as one feed, oldest first: the agent's updates (`ask say`), its forms, and what became of them.
+// Whatever the page is doing now (waiting, an error) shows under it.
+const feed = h("ol", { className: "feed", ariaLabel: "Session" });
+const heard = h("p", { className: "sr-only", ariaLive: "polite" });
+function toFeed(li: HTMLLIElement) {
+  feed.append(li);
+  // ponytail: keeps the last 100 entries; the open form is never dropped
+  while (feed.childElementCount > 100) feed.querySelector(":scope > li:not(.open)")!.remove();
 }
+function say(text: string) {
+  toFeed(h("li", { className: "say" }, md(text)));
+  heard.textContent = text;
+}
+const batchName = (q: Question) => q.title || q.questions[0].label;
+const event = (ico: string, text: string, cls = "") => h("li", { className: `event ${cls}` }, icon(ico), h("span", { textContent: text }));
+const waiting = () => h("div", { className: "waiting" }, live("Waiting for the agent's next question…"));
 
 type Kind = "wait" | "done" | "error" | "agent";
 function stateEl(kind: Kind, title: string, detail?: string, ...extra: Kid[]) {
@@ -179,8 +187,8 @@ function stateEl(kind: Kind, title: string, detail?: string, ...extra: Kid[]) {
 }
 // After swapping screens, move focus to the new heading so keyboard and screen-reader users land on it.
 const show = (...kids: Kid[]) => {
-  app.replaceChildren(shell([...kids, (feed.lastChild as Element).childElementCount ? feed : null]));
-  const h1 = app.querySelector<HTMLElement>("h1");
+  app.replaceChildren(shell([feed, heard, ...kids]));
+  const h1 = app.querySelector<HTMLElement>(".shell-main > :not(.feed) h1");
   if (h1) { h1.tabIndex = -1; h1.focus({ preventScroll: true }); }
 };
 const status = (kind: Kind, title: string, detail?: string, ...extra: Kid[]) => show(stateEl(kind, title, detail, ...extra));
@@ -419,6 +427,8 @@ type Open = { f: ReturnType<typeof buildForm>; sending: boolean; add: (b: Batch)
 function render(sid: string, keys: Keys, st: State, batches: Batch[], done: () => void): Open {
   const [[seq, q], ...rest] = batches;
   const f = buildForm(q);
+  const li = h("li", { className: "open" }, f.form);
+  const names = [batchName(q)];
   const born = Date.now();
   const parts: Part[] = [];
   let unseen = 0, first: Element | undefined;
@@ -471,7 +481,8 @@ function render(sid: string, keys: Keys, st: State, batches: Batch[], done: () =
     f.form.classList.toggle("multi", parts.length > 1);
     if (parts.length) return;
     seen.disconnect();
-    show(stateEl("agent", "Time's up", "The agent went ahead without your answer. Keep this tab open for its next question.", live("Waiting for the agent's next question…")));
+    li.replaceWith(event("clock", `Time's up, the agent went ahead: ${names.join(" · ")}`, "expired"));
+    show(waiting());
     done();
   };
 
@@ -512,7 +523,8 @@ function render(sid: string, keys: Keys, st: State, batches: Batch[], done: () =
       await send(sid, keys, st, seqs, { seqs, ...a });
       if (all) {
         seen.disconnect();
-        show(sentState());
+        li.replaceWith(event("check", `${declined ? "Declined" : "Answered"}: ${names.join(" · ")}`));
+        show(waiting());
       } else {
         for (const p of ps) {
           p.clock?.remove();
@@ -536,6 +548,7 @@ function render(sid: string, keys: Keys, st: State, batches: Batch[], done: () =
     f, sending: false,
     add([s, b]) {
       const r = f.append(b);
+      names.push(batchName(b));
       part(s, r.fields, b);
       if (Date.now() - born < 1000) return; // replayed after a reload, not new
       const el = r.els[0];
@@ -553,8 +566,9 @@ function render(sid: string, keys: Keys, st: State, batches: Batch[], done: () =
   part(seq, f.fields.slice(), q);
   rest.forEach(o.add);
   f.form.onsubmit = (e) => { e.preventDefault(); submit(parts); };
-  show(f.form);
-  scrollTo(0, 0);
+  toFeed(li);
+  show();
+  li.scrollIntoView({ block: "start" });
   if (document.hidden) document.title = `● Question waiting · ${tabTitle()}`;
   return o;
 }
@@ -810,7 +824,6 @@ function listen(sid: string, keys: Keys, st: State) {
     return dup.length ? `ids already in the open form: ${dup.join(", ")}` : f.fields.length + q.questions.length > 50 ? "the open form would have more than 50 questions" : null;
   };
   const onQ = async (seq: number, data: string) => {
-    if (st.answered.includes(seq)) return;
     let q: Question | Say;
     try {
       q = JSON.parse(await open(keys, sid, "q", seq, JSON.parse(data)));
@@ -823,6 +836,9 @@ function listen(sid: string, keys: Keys, st: State) {
   };
   const place = async (seq: number, q: Question | Say) => {
     if ("say" in q) return void (validSay(q) && say(q.say)); // never answered; a bad one is just dropped
+    const ok = validQuestion(q);
+    if (ok && (q.name || (!sessName.textContent && q.title))) nameSession(q.name ?? q.title!); // no name yet: the first title will do
+    if (st.answered.includes(seq)) return void (ok && toFeed(event("check", `Answered: ${batchName(q)}`))); // replayed after a reload
     if (cur?.sending) return void later.push([seq, q]);
     const target = cur;
     const problem = !validQuestion(q) ? (validQuestion as any).errors?.map((x: any) => `${x.instancePath || "/"} ${x.message}`).join("; ") ?? "invalid"
@@ -833,7 +849,6 @@ function listen(sid: string, keys: Keys, st: State) {
       if (cur) return;
       return status("error", "This question can't be shown", "The agent sent a form this page doesn't understand. It has been told; wait for a corrected one.", live("Waiting for the agent…"));
     }
-    if (q.name || (!sessName.textContent && q.title)) nameSession(q.name ?? q.title!); // no name yet: the first title will do
     if (cur) cur.add([seq, q]);
     else cur = render(sid, keys, st, [[seq, q]], done);
     if (Date.now() - born > 1500) ping(q.mood);

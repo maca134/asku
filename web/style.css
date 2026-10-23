@@ -351,7 +351,7 @@ h3 { letter-spacing: -.012em; }
 @media (max-width: 34em) { .topbar:has(.sess b:not(:empty)) .e2e span { display: none; } } /* a phone: the name gets the room */
 .e2e .icon { width: 1.1em; height: 1.1em; stroke-width: 2.2; }
 .shell-main { flex: 1; width: 100%; max-width: 38em; margin: 0 auto; padding: .25em 1em 2em; }
-.shell-main:has(> .qform) { padding-bottom: 0; }
+.shell-main:has(> .feed > .open:last-child) { padding-bottom: 0; }
 
 .input {
   display: block; width: 100%; padding: .68em .85em; font: inherit; font-size: 1em; color: var(--fg);
@@ -479,11 +479,17 @@ details.comment textarea { margin-top: .45em; font-size: .95em; }
 .bell { margin-left: auto; display: grid; place-items: center; width: 2.4em; height: 2.4em; padding: 0; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 50%; cursor: pointer; }
 .bell .icon { width: 1.15em; height: 1.15em; }
 .bell[aria-pressed=true] { color: var(--accent-text); background: var(--accent-soft); border-color: transparent; }
-.feed { margin: 1.5em 0 1em; text-align: left; }
-.feed h2 { margin: 0 0 .5em; font-size: .78em; font-weight: 650; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
-.feed ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .4em; }
-.feed li { padding: .55em .85em; font-size: .92em; color: var(--fg-2); background: var(--surface); border: 1px solid var(--line); border-radius: .75em; animation: rise .35s ease-out; }
-.feed li:last-child { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.feed { list-style: none; margin: .5em 0 1em; padding: 0; display: flex; flex-direction: column; gap: .5em; text-align: left; }
+.feed:empty { display: none; }
+.feed > li { animation: rise .35s ease-out; }
+.feed > .say { padding: .55em .85em; font-size: .92em; color: var(--fg-2); background: var(--surface); border: 1px solid var(--line); border-radius: .75em; }
+.feed > .open { margin: .5em 0; }
+.feed > .event { display: flex; align-items: center; gap: .45em; padding: .15em .2em; font-size: .88em; font-weight: 600; color: var(--ok); }
+.feed > .event span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.feed > .event .icon { flex: none; width: 1.1em; height: 1.1em; stroke-width: 2.4; }
+.feed > .event.expired { color: var(--muted); }
+.feed:not(:empty) ~ .state { padding-top: 1.5em; }
+.waiting { display: flex; justify-content: center; padding-top: .5em; }
 
 /* moods: the agent's feelings, played out on the form */
 .mood { display: flex; align-items: center; gap: .5em; margin: 0 0 .7em; font-size: .92em; font-weight: 560; color: var(--fg-2); }
