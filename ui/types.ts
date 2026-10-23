@@ -12,6 +12,7 @@ export type MultiItem = Base & {
   max?: number;
   other?: boolean;
 };
+export type ReviewItem = Base & { type: "review"; options: Option[] };
 export type TextItem = Base & {
   type: "text";
   default?: string;
@@ -20,7 +21,7 @@ export type TextItem = Base & {
   maxLength?: number;
 };
 export type NumberItem = Base & { type: "number"; default?: number; min?: number; max?: number; step?: number };
-export type Item = ConfirmItem | SingleItem | MultiItem | TextItem | NumberItem;
+export type Item = ConfirmItem | SingleItem | MultiItem | ReviewItem | TextItem | NumberItem;
 
 export type Mood = "confident" | "excited" | "nervous" | "begging" | "grumpy" | "sheepish";
 

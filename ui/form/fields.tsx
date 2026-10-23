@@ -1,18 +1,18 @@
 // One question: its control, a comment box and "Let the agent decide".
 import { type Child, capitalise, h, icon, markdown } from "../dom";
-import type { ConfirmItem, Item, MultiItem, NumberItem, Option, SingleItem, TextItem } from "../types";
+import type { ConfirmItem, Item, MultiItem, NumberItem, Option, ReviewItem, SingleItem, TextItem } from "../types";
 
 type Control = { elements: Child[]; value: () => unknown; check?: () => string | null };
 
 const hint = (text: string) => (text ? <p className="hint">{capitalise(text)}</p> : null);
 
-function yesNo(name: string, value: "yes" | "no", checked: boolean) {
+function yesNo(name: string, value: "yes" | "no", checked: boolean, text = value === "yes" ? "Yes" : "No") {
   const input = h("input", { type: "radio", name, value, checked, className: "sr-only" });
   const label = (
     <label className={`yn yn-${value}`}>
       {input}
       {icon(value === "yes" ? "check" : "x")}
-      <span>{value === "yes" ? "Yes" : "No"}</span>
+      <span>{text}</span>
     </label>
   );
   return { input, label };
@@ -120,6 +120,39 @@ function choiceControl(item: SingleItem | MultiItem, name: string): Control {
   };
 }
 
+// One approve/reject pair per option. Undecided options are left out of the answer.
+function reviewControl(item: ReviewItem, name: string): Control {
+  const rows = item.options.map(option).map(({ value, label, md }, i) => {
+    const yes = yesNo(`${name}-${i}`, "yes", false, "Approve");
+    const no = yesNo(`${name}-${i}`, "no", false, "Reject");
+    const element = (
+      <div className="review" role="radiogroup" ariaLabel={label}>
+        <span className="opt-body">
+          <span className="opt-label">{label}</span>
+          {md && markdown(md)}
+        </span>
+        <div className="seg">
+          {yes.label}
+          {no.label}
+        </div>
+      </div>
+    );
+    return { value, yes: yes.input, no: no.input, element };
+  });
+  const decided = () => rows.filter(({ yes, no }) => yes.checked || no.checked);
+  return {
+    elements: [<div className="opts">{rows.map(({ element }) => element)}</div>],
+    value: () => {
+      const picked = decided();
+      if (picked.length) return Object.fromEntries(picked.map(({ value, yes }) => [value, yes.checked]));
+    },
+    check: () => {
+      const left = rows.length - decided().length;
+      return item.required && left ? `decide every item (${left} left)` : null;
+    },
+  };
+}
+
 function textControl(item: TextItem): Control {
   const props = {
     placeholder: item.placeholder ?? "",
@@ -191,6 +224,8 @@ function control(item: Item, name: string) {
     case "single":
     case "multi":
       return choiceControl(item, name);
+    case "review":
+      return reviewControl(item, name);
     case "text":
       return textControl(item);
     case "number":
@@ -219,7 +254,7 @@ export function field(item: Item, index: number) {
   );
 
   // a radio can't be unticked: optional ones get a way back to "skipped"
-  if (!item.required && (item.type === "confirm" || item.type === "single")) {
+  if (!item.required && (item.type === "confirm" || item.type === "single" || item.type === "review")) {
     const clear = () => {
       for (const input of box.querySelectorAll<HTMLInputElement>("input:checked")) input.checked = false;
       box.dispatchEvent(new Event("change", { bubbles: true }));

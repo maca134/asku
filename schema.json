@@ -31,7 +31,7 @@
       "required": ["id", "type", "label"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
-        "type": { "enum": ["confirm", "single", "multi", "text", "number"] },
+        "type": { "enum": ["confirm", "single", "multi", "review", "text", "number"] },
         "label": { "type": "string", "minLength": 1, "maxLength": 500 },
         "md": { "$ref": "#/$defs/markdown", "description": "Per-question markdown context." },
         "required": { "type": "boolean" }
@@ -83,6 +83,22 @@
               "min": { "type": "integer", "minimum": 0 },
               "max": { "type": "integer", "minimum": 1 },
               "other": { "$ref": "#/$defs/other" }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "review" } } },
+          "then": {
+            "description": "Approve or reject each option. Answered as a map of option value to boolean; undecided options are left out.",
+            "required": ["options"],
+            "properties": {
+              "id": true,
+              "type": true,
+              "label": true,
+              "md": true,
+              "required": true,
+              "options": { "type": "array", "items": { "$ref": "#/$defs/option" }, "minItems": 1, "maxItems": 100 }
             },
             "additionalProperties": false
           }
@@ -172,9 +188,10 @@
           "type": "object",
           "propertyNames": { "$ref": "#/$defs/id" },
           "additionalProperties": {
-            "description": "confirm: boolean, single/text: string, multi: string[], number: number.",
-            "type": ["boolean", "string", "number", "array"],
-            "items": { "type": "string" }
+            "description": "confirm: boolean, single/text: string, multi: string[], number: number, review: {value: boolean}.",
+            "type": ["boolean", "string", "number", "array", "object"],
+            "items": { "type": "string" },
+            "additionalProperties": { "type": "boolean" }
           }
         },
         "skipped": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true },
