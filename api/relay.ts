@@ -188,7 +188,7 @@ export function relay({
   }
 
   async function staticFile(pathname: string) {
-    const page = pathname.match(/^\/(how|security|demo|install|start|terms)?$/);
+    const page = pathname.match(/^\/(how|security|demo|install|start|sessions|terms)?$/);
     if (page) return serveFile(`${page[1] ?? "index"}.html`, "no-store");
     if (/^\/[aj]\/[\w-]{22}$/.test(pathname)) {
       const res = await serveFile("app.html", "no-store");

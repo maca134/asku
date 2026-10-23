@@ -13,6 +13,7 @@ import {
   installation,
   missing,
   security,
+  sessions,
   start,
   terms,
 } from "./sections";
@@ -24,6 +25,7 @@ const SECTIONS: Record<string, () => Child[]> = {
   "/demo": () => [demos(), gallery()],
   "/install": () => [installation()],
   "/start": () => [start()],
+  "/sessions": () => [sessions()],
   "/terms": () => [terms()],
 };
 

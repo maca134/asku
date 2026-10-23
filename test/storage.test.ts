@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { rename, type State } from "../ui/session/storage";
+import { received, rename, type State, summary } from "../ui/session/storage";
 
 const fresh = (): State => ({ priv: {} as CryptoKey, key: "k", answered: [] });
 
@@ -19,4 +19,32 @@ test("a form without a name leaves the session as it was", () => {
   const named = { ...fresh(), name: "Deploy plan" };
   expect(rename(named, undefined)).toBe(false);
   expect(named.name).toBe("Deploy plan");
+});
+
+test("a form stays waiting until an answer covers it", () => {
+  const state = fresh();
+  expect(received(state, 1)).toBe(true);
+  expect(received(state, 1)).toBe(false);
+  expect(summary("sid", state).waiting).toBe(true);
+  state.answered.push(1);
+  expect(summary("sid", state).waiting).toBe(false);
+});
+
+test("a session lists under its name, or a fallback, with its last activity", () => {
+  const named = { ...fresh(), name: "Deploy plan", start: 100, active: 500 };
+  expect(summary("abc", named)).toEqual({
+    sid: "abc",
+    name: "Deploy plan",
+    waiting: false,
+    joined: false,
+    active: 500,
+  });
+  const unnamed = { ...fresh(), agentPub: "pub", start: 100 };
+  expect(summary("def", unnamed)).toEqual({
+    sid: "def",
+    name: "Unnamed session",
+    waiting: false,
+    joined: true,
+    active: 100,
+  });
 });
