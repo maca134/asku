@@ -137,9 +137,11 @@ batches() { local f; for f in "$S/$1"*.json; do [ -e "$f" ] || continue; f=${f##
 # ponytail: grep, not a JSON parser; `"id":"` can't match inside a JSON string, whose quotes are escaped
 ids() { grep -o '"id"[[:space:]]*:[[:space:]]*"[A-Za-z0-9_-]*"' "$1" | sed 's/.*"\([^"]*\)"$/\1/' || true; }
 
-# add <file | ->: queues a batch onto the open form. The 50-question limit and unique ids span the whole form.
+# add <file | ->: queues a batch onto the open form, starting a session (and printing its link) if there is none.
+# The 50-question limit and unique ids span the whole form.
 add() {
-  local f=${1:-} new open dup k n seq
+  local f=${1:-} new open dup k n seq fresh=
+  [ -f "$S/sid" ] || fresh=1
   [ -n "$f" ] || die "$CMD needs a questions.json file, or - for stdin"
   if [ "$f" = - ]; then TMPQ=$(mktemp); trap 'rm -f "$TMPQ"' EXIT; cat > "$TMPQ"; f=$TMPQ; fi
   [ -f "$f" ] || die "$CMD needs a questions.json file"
@@ -155,6 +157,7 @@ add() {
   start
   seq=$(state seq 0); for n in $(batches q); do [ "$n" -le "$seq" ] || seq=$n; done
   cp "$f" "$S/q$((seq + 1)).json"
+  [ -z "$fresh" ] || pending "Give the user this link: $(link)"
 }
 
 # send [nowait]: waits for the bind (or checks it once), then sends the queued batches. Returns 1 if not bound yet.
@@ -238,14 +241,10 @@ CMD=${1:-}
 case "$CMD" in
   ask)
     [ -z "$(batches q)$(batches o)" ] || die "a form is open; run: $0 add <file> to append, or $0 wait"
-    fresh=; [ -f "$S/sid" ] || fresh=1
     add "${2:-}"
-    [ -z "$fresh" ] || pending "Give the user this link: $(link)"
     answer ;;
   add)
-    fresh=; [ -f "$S/sid" ] || fresh=1
     add "${2:-}"
-    [ -z "$fresh" ] || pending "Give the user this link: $(link)"
     send nowait || pending "Queued. The user has not opened the link yet. Give them: $(link)"
     pending "Sent. Add more with add, or run wait for the answer." ;;
   join) join "${2:-}"; answer ;;

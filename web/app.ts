@@ -109,7 +109,7 @@ const show = (...kids: Kid[]) => {
 const status = (kind: Kind, title: string, detail?: string, ...extra: Kid[]) => show(stateEl(kind, title, detail, ...extra));
 const live = (text: string) => h("p", { className: "live" }, h("span", { className: "pulse" }), text);
 const home = () => h("a", { className: "btn btn-secondary", href: "/" }, `Go to ${location.host}`);
-const startNew = () => h("a", { className: "btn btn-secondary", href: "/start" }, "Start a new session");
+const startNew = (kind = "btn-secondary") => h("a", { className: `btn ${kind}`, href: "/start" }, "Start a new session");
 
 // ---- persistence: the fragment is gone after first load, so key pair B and the write key live in IndexedDB.
 // ponytail: IndexedDB unavailable (some private modes) means a reload loses the session; fine, the agent can start a new one.
@@ -662,7 +662,7 @@ function listen(sid: string, keys: Keys, st: State) {
     es.close();
     drop(sid);
     status("done", "Session ended", "The agent closed this session and the relay deleted it. You can close this tab.",
-      h("div", { className: "state-actions" }, h("a", { className: "btn btn-primary", href: "/start" }, "Start a new session"), home()));
+      h("div", { className: "state-actions" }, startNew("btn-primary"), home()));
   });
   es.onerror = () => {
     if (es.readyState === EventSource.CLOSED) return status("error", "This session has ended or expired", undefined, startNew(), home());

@@ -199,8 +199,10 @@ function Get-AskuIds([string]$Path) {
     @($j.questions | ForEach-Object { $_.id })
 }
 
-# Queues a batch onto the open form. The 50-question limit and unique ids span the whole form.
+# Queues a batch onto the open form, starting a session (and printing its link) if there is none.
+# The 50-question limit and unique ids span the whole form.
 function Add-AskuBatch([string]$File) {
+    $fresh = -not (Test-Path (Join-Path $S 'sid'))
     if (-not $File -or -not (Test-Path $File)) { Fail "$Command needs a questions.json file" }
     $new = Get-AskuIds $File
     # ponytail: counts batches the user may have just submitted (we can't know yet); a false refusal only costs a rename
@@ -211,6 +213,7 @@ function Add-AskuBatch([string]$File) {
     Start-AskuSession
     $seq = (@([int](Get-State 'seq' 0)) + @(Get-Batches 'q') | Measure-Object -Maximum).Maximum + 1
     Copy-Item $File (Join-Path $S "q$seq.json")
+    if ($fresh) { Pending "Give the user this link: $(Get-Link)" }
 }
 
 # Waits for the bind (or checks it once with -NoWait), then sends the queued batches. Returns the keys, or $null if not bound yet.
@@ -303,15 +306,11 @@ env: ASKU_URL ASKU_SESSION ASKU_HOME ASKU_WAIT
 switch ($Command) {
     'ask' {
         if ((Get-Batches 'q').Count + (Get-Batches 'o').Count) { Fail "a form is open; run: $Self add <file> to append, or $Self wait" }
-        $fresh = -not (Test-Path (Join-Path $S 'sid'))
         Add-AskuBatch $File
-        if ($fresh) { Pending "Give the user this link: $(Get-Link)" }
         Wait-Asku
     }
     'add' {
-        $fresh = -not (Test-Path (Join-Path $S 'sid'))
         Add-AskuBatch $File
-        if ($fresh) { Pending "Give the user this link: $(Get-Link)" }
         if (-not (Send-Asku -NoWait)) { Pending "Queued. The user has not opened the link yet. Give them: $(Get-Link)" }
         Pending 'Sent. Add more with add, or run wait for the answer.'
     }
