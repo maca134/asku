@@ -153,9 +153,15 @@
               "default": { "type": "number" },
               "min": { "type": "number" },
               "max": { "type": "number" },
-              "step": { "type": "number", "exclusiveMinimum": 0 }
+              "step": { "type": "number", "exclusiveMinimum": 0 },
+              "display": {
+                "enum": ["stepper", "slider"],
+                "description": "slider shows a range input; it needs min and max. Still answered as a number."
+              }
             },
-            "additionalProperties": false
+            "additionalProperties": false,
+            "if": { "required": ["display"], "properties": { "display": { "const": "slider" } } },
+            "then": { "required": ["min", "max"] }
           }
         },
         {

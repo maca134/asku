@@ -21,7 +21,14 @@ export type TextItem = Base & {
   multiline?: boolean;
   maxLength?: number;
 };
-export type NumberItem = Base & { type: "number"; default?: number; min?: number; max?: number; step?: number };
+export type NumberItem = Base & {
+  type: "number";
+  default?: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  display?: "stepper" | "slider";
+};
 export type DateItem = Base & { type: "date"; time?: boolean; default?: string; min?: string; max?: string };
 export type Item = ConfirmItem | SingleItem | MultiItem | ReviewItem | RankItem | TextItem | NumberItem | DateItem;
 

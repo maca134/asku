@@ -76,6 +76,18 @@ test("date: a day, or a day and time with time: true", () => {
   expect(valid("answer", { answers: { x: "2026-10-24T09:30+07:00" }, skipped: [] })).toBe(true);
 });
 
+test("number: display slider needs min and max", () => {
+  const slider = { type: "number", display: "slider", min: 0, max: 100 };
+  expect(valid("question", q(slider))).toBe(true);
+  expect(valid("question", q({ ...slider, step: 5, default: 10, required: true }))).toBe(true);
+  expect(valid("question", q({ type: "number", display: "stepper" }))).toBe(true);
+  expect(valid("question", q({ type: "number", display: "slider", min: 0 }))).toBe(false);
+  expect(valid("question", q({ type: "number", display: "slider", max: 100 }))).toBe(false);
+  expect(valid("question", q({ type: "number", display: "slider" }))).toBe(false);
+  expect(valid("question", q({ ...slider, display: "dial" }))).toBe(false);
+  expect(valid("question", q({ type: "text", display: "slider", min: 0, max: 1 }))).toBe(false);
+});
+
 test("deadline, mood, say and delegated", () => {
   expect(
     valid("question", {
