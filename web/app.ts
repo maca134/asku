@@ -370,7 +370,7 @@ const next = (label: string, href: string) => h("div", { className: "next" }, h(
 function landing() {
   const path = location.pathname;
   const nav = h("nav", { className: "nav", ariaLabel: "Main" },
-    ...Object.entries(pages).map(([href, textContent]) => h("a", { href, textContent, ...(href === path && { ariaCurrent: "page" }) })),
+    ...Object.entries(pages).filter(([href]) => href !== "/terms").map(([href, textContent]) => h("a", { href, textContent, ...(href === path && { ariaCurrent: "page" }) })),
     h("a", { href: "https://github.com/maca134/asku", className: "nav-gh", ariaLabel: "asku on GitHub" }, icon("github")));
   const header = h("header", { className: "site-header" }, h("div", { className: "wrap bar" }, logo("/"), nav));
 
@@ -440,16 +440,44 @@ function landing() {
     head("Start here", "/start"),
     startCard()));
 
+  const ul = (...items: string[]) => h("ul", {}, ...items.map((t) => h("li", {}, ...rich(t))));
+  const terms = h("section", { className: "sec" }, h("div", { className: "wrap narrow" },
+    head("Terms", "/terms"),
+    h("div", { className: "terms" },
+      p("asku.dev (\"the service\") is a free relay that passes end-to-end encrypted messages between an AI agent and a web browser. It is run by Matthew McConnell as a hobby project. By using it you agree to these terms."),
+      h("h3", { textContent: "Your responsibility" }),
+      ul("A session is meant for the person running the agent. You are responsible for who you share a session link with. Anyone who opens the link first controls that session.",
+        "You are responsible for what your agent does, including anything it does with the answers it receives.",
+        "You must follow the terms of your AI provider and of any other service your agent uses."),
+      h("h3", { textContent: "Acceptable use" }),
+      p("Don't use the service to:"),
+      ul("break the law or infringe anyone's rights,", "send malware, spam or content meant to harass or harm people,",
+        "overload, probe or attack the relay, or get around its rate limits,", "run a service for third parties on top of it without permission."),
+      h("h3", { textContent: "What we can and can't see" }),
+      ul("Questions and answers are encrypted on your devices. The relay can't read them.",
+        "The relay does see metadata: IP addresses, timestamps, session IDs and message sizes. It uses these to run the service and stop abuse.",
+        "Sessions are deleted when the agent closes them or after 24 hours without activity.",
+        "We may keep basic server logs for up to [30] days."),
+      h("h3", { textContent: "Enforcement" }),
+      p("We may rate-limit, end or block sessions or clients at any time, without notice, to protect the service or other users."),
+      h("h3", { textContent: "No warranty" }),
+      p("The service is provided \"as is\", without any warranty. It may be slow, unavailable or lose messages. Don't rely on it for anything critical. To the extent the law allows, we are not liable for any loss arising from your use of it."),
+      h("h3", { textContent: "Changes" }),
+      p("We may update these terms. Continuing to use the service means you accept the current version."),
+      h("h3", { textContent: "Contact" }),
+      h("p", {}, "[email address] · Source code: ", h("a", { href: "https://github.com/maca134/asku", textContent: "github.com/maca134/asku" }), " (MIT License)"))));
+
   const footer = h("footer", { className: "site-footer" }, h("div", { className: "wrap foot" },
     h("div", { className: "foot-brand" }, logo("/"), h("span", { textContent: "Encrypted questions from AI agents to you." })),
     h("nav", { className: "foot-links", ariaLabel: "Footer" },
       h("a", { href: "https://github.com/maca134/asku" }, icon("github"), "GitHub"),
       h("a", { href: "/skill.md", textContent: "SKILL.md" }),
       h("a", { href: "/schema.json", textContent: "schema.json" }),
-      h("a", { href: "https://github.com/maca134/asku/blob/main/LICENSE", textContent: "MIT License" }))));
+      h("a", { href: "https://github.com/maca134/asku/blob/main/LICENSE", textContent: "MIT License" }),
+      h("a", { href: "/terms", textContent: "Terms" }))));
 
   const missing = h("section", { className: "sec" }, h("div", { className: "wrap narrow" }, stateEl("error", "Page not found", "There's nothing at this address."), next("Go home", "/")));
-  const body = { "/": [hero], "/how": [how, controls, faq], "/security": [security], "/install": [install], "/start": [start] }[path] ?? [missing];
+  const body = { "/": [hero], "/how": [how, controls, faq], "/security": [security], "/install": [install], "/start": [start], "/terms": [terms] }[path] ?? [missing];
   document.title = PAGES[path]?.title ?? "Not found · asku";
   app.replaceChildren(header, h("main", { className: "landing" }, ...body), footer);
 }

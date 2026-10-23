@@ -161,7 +161,7 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
   async function route(req: Request, srv: Server): Promise<Response> {
     const url = new URL(req.url);
     const m = req.method;
-    const page = url.pathname.match(/^\/(how|security|install|start)?$/);
+    const page = url.pathname.match(/^\/(how|security|install|start|terms)?$/);
     if (m === "GET" && page) return file(`${page[1] ?? "index"}.html`, "no-store");
     if (m === "GET" && /^\/[aj]\/[\w-]{22}$/.test(url.pathname)) {
       const res = await file("app.html", "no-store");

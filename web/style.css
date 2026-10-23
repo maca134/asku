@@ -265,6 +265,8 @@ h3 { letter-spacing: -.012em; }
 @media (min-width: 720px) { .packet { top: -3px; left: 0; animation-name: across; } }
 .wire:nth-child(4) .packet { animation-delay: -1.3s; }
 
+.terms h3 { margin: 2rem 0 .5rem; }
+.terms ul { padding-left: 1.3em; }
 .faq { margin: 0; }
 .faq dt { font-weight: 650; margin-top: 1.5rem; }
 .faq dd { margin: .35rem 0 0; color: var(--muted); }

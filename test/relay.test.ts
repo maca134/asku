@@ -102,14 +102,14 @@ test("rate limits session creation per IP", async () => {
 test("serves the page and hashed assets", async () => {
   const dist = mkdtempSync(`${tmpdir()}/asku-dist-`);
   mkdirSync(`${dist}/assets`);
-  for (const f of ["index", "how", "security", "install", "start", "app"]) writeFileSync(`${dist}/${f}.html`, f);
+  for (const f of ["index", "how", "security", "install", "start", "terms", "app"]) writeFileSync(`${dist}/${f}.html`, f);
   writeFileSync(`${dist}/robots.txt`, "User-agent: *");
   writeFileSync(`${dist}/assets/app-abc123.js`, "1");
   writeFileSync(`${dist}/skill.md`, "# asku");
   const s = relay({ dist });
   const at = (p: string) => fetch(s.server.url.href.replace(/\/$/, "") + p);
   try {
-    for (const p of ["/", "/how", "/security", "/install", "/start", "/a/abcdefghijklmnopqrstuv"]) {
+    for (const p of ["/", "/how", "/security", "/install", "/start", "/terms", "/a/abcdefghijklmnopqrstuv"]) {
       const res = await at(p);
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("text/html");

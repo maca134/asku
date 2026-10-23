@@ -46,4 +46,11 @@ export const PAGES: Record<string, Page> = {
     h1: "Start from the website",
     lead: "Already in a chat with your agent? Write it a message, get a link, and paste the link into the chat. The agent joins and asks you here.",
   },
+  "/terms": {
+    nav: "Terms",
+    title: "Terms · asku",
+    description: "Terms of use for asku.dev, the free end-to-end encrypted relay between AI agents and your browser.",
+    h1: "Terms of use",
+    lead: "Last updated: 23 October 2026",
+  },
 };
