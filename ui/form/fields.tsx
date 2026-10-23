@@ -1,6 +1,16 @@
 // One question: its control, a comment box and "Let the agent decide".
 import { type Child, capitalise, h, icon, markdown } from "../dom";
-import type { ConfirmItem, Item, MultiItem, NumberItem, Option, ReviewItem, SingleItem, TextItem } from "../types";
+import type {
+  ConfirmItem,
+  Item,
+  MultiItem,
+  NumberItem,
+  Option,
+  RankItem,
+  ReviewItem,
+  SingleItem,
+  TextItem,
+} from "../types";
 
 type Control = { elements: Child[]; value: () => unknown; check?: () => string | null };
 
@@ -153,6 +163,79 @@ function reviewControl(item: ReviewItem, name: string): Control {
   };
 }
 
+// The options in order, moved with up/down buttons. Skipped until an item moves or "This order is fine" is ticked.
+function rankControl(item: RankItem): Control {
+  const list = <ol className="rank" ariaLabel={item.label} />;
+  const status = <p className="sr-only" ariaLive="polite" />;
+  const fine = h("input", { type: "checkbox", className: "pick" });
+  const rows = item.options.map(option).map(({ value, label, md }) => {
+    const button = (direction: 1 | -1) => (
+      <button
+        type="button"
+        className="stepbtn"
+        ariaLabel={`Move “${label}” ${direction < 0 ? "up" : "down"}`}
+        onclick={() => move(row, direction)}
+      >
+        {icon(direction < 0 ? "up" : "down")}
+      </button>
+    );
+    const up = button(-1);
+    const down = button(1);
+    const element = (
+      <li className="rank-row">
+        <span className="rank-pos" ariaHidden="true" />
+        <span className="opt-body">
+          <span className="opt-label">{label}</span>
+          {md && markdown(md)}
+        </span>
+        {up}
+        {down}
+      </li>
+    );
+    const row = { value, label, up, down, element };
+    return row;
+  });
+
+  const render = () => {
+    rows.forEach(({ up, down, element }, i) => {
+      element.querySelector(".rank-pos")!.textContent = String(i + 1);
+      up.ariaDisabled = String(i === 0);
+      down.ariaDisabled = String(i === rows.length - 1);
+    });
+    list.replaceChildren(...rows.map(({ element }) => element));
+  };
+  const move = (row: (typeof rows)[number], direction: 1 | -1) => {
+    const from = rows.indexOf(row);
+    const to = from + direction;
+    if (to < 0 || to >= rows.length) return;
+    rows.splice(from, 1);
+    rows.splice(to, 0, row);
+    render();
+    // re-inserting a row drops its focus; keep it on the button so the next press moves it again
+    (direction < 0 ? row.up : row.down).focus();
+    status.textContent = `“${row.label}” moved to ${to + 1} of ${rows.length}`;
+    fine.checked = true;
+    list.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  render();
+
+  return {
+    elements: [
+      <div className="opts">
+        {list}
+        <label className="opt">
+          {fine}
+          <span className="opt-body">
+            <span className="opt-label">This order is fine</span>
+          </span>
+        </label>
+      </div>,
+      status,
+    ],
+    value: () => (fine.checked ? rows.map(({ value }) => value) : undefined),
+  };
+}
+
 function textControl(item: TextItem): Control {
   const props = {
     placeholder: item.placeholder ?? "",
@@ -226,6 +309,8 @@ function control(item: Item, name: string) {
       return choiceControl(item, name);
     case "review":
       return reviewControl(item, name);
+    case "rank":
+      return rankControl(item);
     case "text":
       return textControl(item);
     case "number":
@@ -233,7 +318,8 @@ function control(item: Item, name: string) {
   }
 }
 
-const LOCKABLE = ".opts input, .seg input, .stepper input, .stepper button, :scope > .input, :scope > .clear";
+const LOCKABLE =
+  ".opts input, .opts button, .seg input, .stepper input, .stepper button, :scope > .input, :scope > .clear";
 
 export type Field = ReturnType<typeof field>;
 

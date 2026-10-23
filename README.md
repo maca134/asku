@@ -84,7 +84,7 @@ Verify TAG in constant time BEFORE decrypt.
 `{ "v":1, "seq":n, "dir":"q"|"a", "iv":"…", "ct":"…", "tag":"…" }`
 
 ### v1 controls
-`confirm`, `single`, `multi`, `review`, `text`, `number`, plus markdown context (DOMPurify) and an implicit per-question comment field.
+`confirm`, `single`, `multi`, `review`, `rank`, `text`, `number`, plus markdown context (DOMPurify) and an implicit per-question comment field.
 Answer shape: `{ "answers": { "<id>": value }, "skipped": [], "comments": { "<id>": "" }, "note": "" }`.
 Unanswered optional questions go in `skipped`. Questions the user hands back with "Let the agent decide" go in `delegated`. If a question fails schema validation in the browser, the agent gets back `{ …, "error": "invalid question: …" }` instead.
 - `deadline` (seconds) on a form: the page counts down and locks the batch at zero. The client stops waiting then and prints `{ "seqs": […], "answers": {}, "skipped": [<its ids>], …, "timeout": true }`. When the client queues the batch it adds `sent` (unix seconds), so the page counts from when the agent asked, not from when the page opened. Queue numbers can have gaps after a timeout; the client numbers messages on the wire from the last one it sent.
