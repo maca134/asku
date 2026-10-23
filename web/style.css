@@ -457,6 +457,7 @@ details.comment summary:hover { color: var(--fg); background: var(--bg-2); }
 details.comment[open] summary, details.comment.has summary { color: var(--accent-text); }
 .clear { display: none; margin: .55em 0 0; padding: .4em .1em; min-height: 2.5rem; font: inherit; font-size: .85em; font-weight: 560; color: var(--muted); background: none; border: 0; cursor: pointer; text-decoration: underline; text-underline-offset: .2em; }
 .q:has(input:checked) > .clear { display: inline-block; }
+.q:has(input:checked) > .clear ~ .dice { margin-left: .6em; } /* same row as Clear answer: don't pull over it */
 html:has(.qform) { scroll-padding-bottom: 6rem; } /* keep a focused field clear of the sticky submit bar */
 details.comment summary .icon { width: 1.1em; height: 1.1em; }
 details.comment textarea { margin-top: .45em; font-size: .95em; }
