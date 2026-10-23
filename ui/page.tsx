@@ -1,6 +1,6 @@
 // The app's page frame: top bar, the session feed, status screens and the bell.
 import { app, type Child, codeSpans, h, icon, logo, markdown } from "./dom";
-import type { Mood, Question } from "./types";
+import type { Mood, Question, Say } from "./types";
 
 export const sessionName = h("b");
 const sessionTime = <span className="sess-time" title="Session running time" />;
@@ -135,9 +135,36 @@ export function addToFeed(item: HTMLElement) {
   while (feed.childElementCount > 100) feed.querySelector(":scope > li:not(.open)")!.remove();
 }
 
-export function say(text: string) {
-  addToFeed(<li className="say">{markdown(text)}</li>);
-  announcer.textContent = text;
+const bars = new Map<string, HTMLElement>();
+
+export function say({ say: text, progress }: Say) {
+  if (!progress) {
+    addToFeed(<li className="say">{markdown(text)}</li>);
+    announcer.textContent = text;
+    return;
+  }
+  const { done, total } = progress;
+  const complete = done === total;
+  const count = complete ? `${done}/${total}, complete` : `${done}/${total}`;
+  const bar = (
+    <li className={`say meter${complete ? " complete" : ""}`}>
+      {markdown(text)}
+      <div className="meter-row">
+        {h("progress", { max: total, value: done, ariaLabel: text })}
+        <span className="meter-count">
+          {complete && icon("check")}
+          {count}
+        </span>
+      </div>
+    </li>
+  );
+  const old = bars.get(text);
+  if (old?.isConnected) {
+    bar.classList.add("moved");
+    old.replaceWith(bar);
+  } else addToFeed(bar);
+  bars.set(text, bar);
+  announcer.textContent = `${text}: ${count}`;
 }
 
 // the user's own message: plain text, not markdown

@@ -4,7 +4,7 @@ import answer from "../examples/answer.json";
 import question from "../examples/question.json";
 import schema from "../schema.json";
 
-const ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
+const ajv = new Ajv({ allErrors: true, allowUnionTypes: true, $data: true });
 ajv.addSchema(schema);
 const valid = (def: string, x: unknown) => ajv.validate(`${schema.$id}#/$defs/${def}`, x);
 const q = (item: object) => ({ questions: [{ id: "x", label: "L", ...item }] });
@@ -25,6 +25,18 @@ test("bad shapes are rejected", () => {
   expect(valid("question", { ...q({ type: "confirm" }), deadline: 0 })).toBe(false);
   expect(valid("say", { say: "" })).toBe(false);
   expect(valid("say", { say: "hi", questions: [] })).toBe(false);
+});
+
+test("say progress: 0 <= done <= total, total >= 1", () => {
+  const progress = (done: number, total: number) => valid("say", { say: "Tests", progress: { done, total } });
+  expect(progress(42, 50)).toBe(true);
+  expect(progress(0, 1)).toBe(true);
+  expect(progress(50, 50)).toBe(true);
+  expect(progress(-1, 50)).toBe(false);
+  expect(progress(0, 0)).toBe(false);
+  expect(progress(51, 50)).toBe(false);
+  expect(progress(1.5, 50)).toBe(false);
+  expect(valid("say", { say: "Tests", progress: { done: 1 } })).toBe(false);
 });
 
 test("message: text or STOP from the user, nothing else", () => {

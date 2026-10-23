@@ -42,6 +42,7 @@ Below, `ask` means whichever script you use.
 | `ask add <file.json>` | Append questions to the open form (or open one) without waiting |
 | `ask join <link>` | Join a session the user started on asku.dev; returns their opening note |
 | `ask say "<text>"` | Show a one-way update on the user's page (markdown); never answered |
+| `ask say "<label>" --progress <done>/<total>` | Show or move a progress bar for `<label>` on the user's page |
 | `ask wait` | Keep waiting for the answer after `PENDING` |
 | `ask close` | End the session and purge it from the relay |
 | `ask version` | Print the client version |
@@ -86,6 +87,10 @@ Sessions are named by `ASKU_SESSION` (default `default`). Use a different name t
 **Status updates.** While a session is open, `ask say "Tests 42/50 passing"` posts a line to a feed on the user's page
 and exits `0` at once. Use it for progress on long work between questions; keep it to milestones, not every step.
 It also prints any messages the user sent meanwhile, so during long work it is how you hear a STOP.
+
+**Progress bars.** For counted work, `ask say "Tests" --progress 42/50` shows a bar instead of a line. Later updates
+with the same label move that bar rather than adding new lines, and it shows complete when done equals total. `done`
+and `total` are whole numbers, `0 <= done <= total` and `total >= 1`; anything else exits `1`.
 
 ## Question format
 

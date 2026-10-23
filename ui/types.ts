@@ -45,7 +45,7 @@ export type Question = {
 };
 
 // `ask say`: a one-way update, never answered
-export type Say = { say: string };
+export type Say = { say: string; progress?: { done: number; total: number } };
 
 // the user to the agent, outside any form: dir m
 export type Message = { message: string } | { stop: true };

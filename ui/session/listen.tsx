@@ -76,7 +76,7 @@ export function listen(session: Session) {
 
   const place = async (seq: number, message: Question | Say) => {
     if ("say" in message) {
-      if (validSay(message)) say(message.say);
+      if (validSay(message)) say(message);
       return;
     }
     const valid = validQuestion(message);
