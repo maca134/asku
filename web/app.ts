@@ -73,9 +73,9 @@ function icon(name: string, cls = "") {
   s.innerHTML = ICONS[name];
   return s;
 }
-const mark = () => h("span", { className: "mark" }, icon("bubble"));
+// a terminal prompt: › asku▊
 const logo = (href?: string) => {
-  const kids = [mark(), h("span", { className: "wordmark", textContent: "asku" })];
+  const kids = [h("span", { className: "logo-prompt", ariaHidden: "true", textContent: "›" }), h("span", { className: "wordmark", textContent: "asku" }), h("i", { className: "logo-caret", ariaHidden: "true" })];
   return href ? h("a", { className: "logo", href, ariaLabel: "asku home" }, ...kids) : h("span", { className: "logo" }, ...kids);
 };
 
