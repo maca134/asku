@@ -113,9 +113,11 @@ code { font-family: var(--mono); font-size: .86em; background: var(--bg-2); bord
 .mark .icon { width: 68%; height: 68%; stroke-width: 2; }
 .nav { display: flex; align-items: center; gap: .15rem; }
 .nav a { color: var(--muted); text-decoration: none; font-size: .92rem; font-weight: 550; padding: .45rem .7rem; border-radius: 8px; display: inline-flex; }
-.nav a:hover { color: var(--fg); background: var(--bg-2); }
+.nav a:hover, .nav a[aria-current="page"] { color: var(--fg); background: var(--bg-2); }
 .nav-gh .icon { width: 1.25rem; height: 1.25rem; }
-@media (max-width: 639px) { .nav-hide { display: none !important; } }
+.nav a { white-space: nowrap; }
+@media (max-width: 639px) { .nav { gap: 0; } .nav a { font-size: .8rem; padding: .4rem .32rem; } }
+.next { display: flex; justify-content: center; margin-top: 3rem; }
 
 .hero { position: relative; padding: 3.5rem 0 3.5rem; overflow: hidden; isolation: isolate; }
 .hero::before {

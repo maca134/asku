@@ -108,7 +108,7 @@ test("serves the page and hashed assets", async () => {
   const s = relay({ dist });
   const at = (p: string) => fetch(s.server.url.href.replace(/\/$/, "") + p);
   try {
-    for (const p of ["/", "/a/abcdefghijklmnopqrstuv"]) {
+    for (const p of ["/", "/how", "/security", "/install", "/start", "/a/abcdefghijklmnopqrstuv"]) {
       const res = await at(p);
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("text/html");
@@ -122,6 +122,9 @@ test("serves the page and hashed assets", async () => {
     expect(await md.text()).toBe("# asku");
     expect(md.headers.get("content-type")).toBe("text/plain; charset=utf-8");
     for (const p of ["/ask.sh", "/assets/nope.js", "/assets/..%2Findex.html", "/a/short", "/index.html"]) expect((await at(p)).status).toBe(404);
+    const missing = await at("/nope");
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get("content-type")).toContain("text/html");
   } finally {
     s.stop();
   }

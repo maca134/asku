@@ -149,10 +149,10 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
   }
 
   // Built frontend (bun run build). Paths are matched by strict regexes before reaching here.
-  async function file(path: string, cache: string, type?: string) {
+  async function file(path: string, cache: string, type?: string, status = 200) {
     const f = Bun.file(`${dist}/${path}`);
     if (!(await f.exists())) return fail(404, "not found");
-    return new Response(f, { headers: { "cache-control": cache, ...(type && { "content-type": type }) } });
+    return new Response(f, { status, headers: { "cache-control": cache, ...(type && { "content-type": type }) } });
   }
 
   const authed = (req: Request, key: string | null) =>
@@ -161,7 +161,7 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
   async function route(req: Request, srv: Server): Promise<Response> {
     const url = new URL(req.url);
     const m = req.method;
-    if (m === "GET" && (url.pathname === "/" || /^\/[aj]\/[\w-]{22}$/.test(url.pathname))) return file("index.html", "no-store");
+    if (m === "GET" && /^\/(how|security|install|start)?$|^\/[aj]\/[\w-]{22}$/.test(url.pathname)) return file("index.html", "no-store");
     const asset = url.pathname.match(/^\/assets\/([\w-]+\.(?:js|css))$/);
     if (m === "GET" && asset) return file(`assets/${asset[1]}`, "public, max-age=31536000, immutable");
     // The skill: SKILL.md, the agent scripts and the schema, as plain text so curl and browsers both just show them.
@@ -169,6 +169,8 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
       return file(url.pathname.slice(1), "no-cache", url.pathname.endsWith(".json") ? "application/json" : "text/plain; charset=utf-8");
 
     const [, root, sid, sub, extra] = url.pathname.split("/");
+    // Unknown pages get the app, which shows its own not-found page.
+    if (m === "GET" && root !== "s" && root !== "assets") return file("index.html", "no-store", undefined, 404);
     if (root !== "s" || extra !== undefined) return fail(404, "not found");
 
     if (!sid) {
