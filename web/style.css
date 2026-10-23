@@ -176,14 +176,14 @@ code { font-family: var(--mono); font-size: .86em; background: var(--bg-2); bord
 .term-title { flex: 1; text-align: center; margin-right: 52px; color: #85858f; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .term-body { flex: 1; overflow: hidden; padding: 14px 16px 18px; }
 .tl { white-space: pre-wrap; overflow-wrap: anywhere; }
-.tl:is(.cmd, .agent, .prompt) { margin-top: .75em; }
-.tl:first-child { margin-top: 0; }
+:is(.tool, .tl.agent, .tl.prompt) { margin-top: .75em; }
+.term-body > :first-child { margin-top: 0; }
 .tl.prompt { color: #fff; background: #ffffff0b; border: 1px solid #ffffff14; border-radius: 8px; padding: .55em .8em; }
 .tl.agent { color: #ececf3; }
 .tl.json { margin: .3em 0 0; padding-left: .9em; border-left: 2px solid #ffffff17; }
 .tl:is(.cmd, .prompt):last-child::after { content: ""; display: inline-block; width: .55em; height: 1.15em; margin-left: 2px; vertical-align: -.22em; background: #c9c9d4; animation: blink 1.05s steps(1) infinite; }
 .t-dim { color: #75757f; }
-.t-accent { color: #a3a3ff; }
+.t-accent { color: var(--t-accent, #a3a3ff); }
 .t-warn { color: #fbbf24; font-weight: 700; }
 .t-ok { color: #4ade80; }
 .t-link { color: #93c5fd; text-decoration: underline; text-decoration-color: #93c5fd66; text-underline-offset: 3px; }
@@ -192,6 +192,21 @@ code { font-family: var(--mono); font-size: .86em; background: var(--bg-2); bord
 .j-num { color: #fdba74; }
 .j-lit { color: #f0abfc; }
 .tspin { display: inline-block; width: .8em; height: .8em; vertical-align: -.05em; border: 2px solid #75757f; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; }
+
+/* the /demo page: one terminal look per agent CLI */
+.clis { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin: 0 0 2rem; }
+.clis [aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.cli-claude { --t-accent: #e8875f; }
+.cli-codex { --t-accent: #e8e8ee; }
+.cli-gemini { --t-accent: #8ab4f8; }
+.demo:not(.cli-shell) .tool-mark { color: #4ade80; }
+.demo:not(.cli-shell) .tl.cmd::after { display: none; }
+:is(.cli-claude, .cli-codex) .tool .out { padding-left: 5ch; }
+:is(.cli-claude, .cli-codex) .tool .cmd + .out::before { display: inline-block; width: 5ch; margin-left: -5ch; color: #75757f; }
+.cli-claude .tool .cmd + .out::before { content: "  ⎿  "; }
+.cli-codex .tool .cmd + .out::before { content: "  └  "; }
+.cli-gemini .tool { border: 1px solid #ffffff26; border-radius: 8px; padding: .5em .8em; }
+.cli-gemini .tl.prompt { border-color: #8ab4f866; }
 
 .phone {
   position: relative; flex: none; width: 300px; height: 612px; padding: 10px; border-radius: 50px;

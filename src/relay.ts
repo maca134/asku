@@ -161,7 +161,7 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
   async function route(req: Request, srv: Server): Promise<Response> {
     const url = new URL(req.url);
     const m = req.method;
-    if (m === "GET" && /^\/(how|security|install|start)?$|^\/[aj]\/[\w-]{22}$/.test(url.pathname)) return file("index.html", "no-store");
+    if (m === "GET" && /^\/(how|security|demo|install|start)?$|^\/[aj]\/[\w-]{22}$/.test(url.pathname)) return file("index.html", "no-store");
     const asset = url.pathname.match(/^\/assets\/([\w-]+\.(?:js|css))$/);
     if (m === "GET" && asset) return file(`assets/${asset[1]}`, "public, max-age=31536000, immutable");
     // The skill: SKILL.md, the agent scripts and the schema, as plain text so curl and browsers both just show them.

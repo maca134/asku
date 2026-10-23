@@ -108,7 +108,7 @@ test("serves the page and hashed assets", async () => {
   const s = relay({ dist });
   const at = (p: string) => fetch(s.server.url.href.replace(/\/$/, "") + p);
   try {
-    for (const p of ["/", "/how", "/security", "/install", "/start", "/a/abcdefghijklmnopqrstuv"]) {
+    for (const p of ["/", "/how", "/security", "/demo", "/install", "/start", "/a/abcdefghijklmnopqrstuv"]) {
       const res = await at(p);
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type")).toContain("text/html");
