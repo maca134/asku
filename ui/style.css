@@ -2020,6 +2020,9 @@ details.comment textarea {
   width: 1.15em;
   height: 1.15em;
 }
+.bell.push {
+  margin-left: 0.4em;
+}
 .bell[aria-pressed="true"] {
   color: var(--accent-text);
   background: var(--accent-soft);

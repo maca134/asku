@@ -15,6 +15,7 @@ export type Session = {
   agentKeyHash: string | null;
   browserKeyHash: string | null;
   bytes: number;
+  push: string | null;
 };
 
 export function openStore(path: string) {
@@ -22,7 +23,11 @@ export function openStore(path: string) {
   db.run("pragma journal_mode = wal");
   db.run(`create table if not exists sessions (
     sid text primary key, role text not null, creatorPub text not null, joinerPub text, bindTag text,
-    agentKeyHash text, browserKeyHash text, bytes integer not null default 0, touched integer not null)`);
+    agentKeyHash text, browserKeyHash text, bytes integer not null default 0, touched integer not null, push text)`);
+  // databases from before push notifications: add the column, or fail because it is already there
+  try {
+    db.run("alter table sessions add column push text");
+  } catch {}
   db.run(`create table if not exists messages (
     sid text not null, direction text not null, seq integer not null, envelope text not null,
     primary key (sid, direction, seq)) without rowid`);
@@ -37,6 +42,7 @@ export function openStore(path: string) {
       agentKeyHash = case role when 'browser' then ?3 else agentKeyHash end,
       browserKeyHash = case role when 'agent' then ?3 else browserKeyHash end
       where sid = ?4 and joinerPub is null`),
+    setPush: db.query("update sessions set push = ? where sid = ?"),
     touch: db.query("update sessions set touched = ? where sid = ?"),
     grow: db.query("update sessions set bytes = bytes + ?, touched = ? where sid = ?"),
     lastSeq: db.query<{ seq: number | null }, [string, Direction]>(

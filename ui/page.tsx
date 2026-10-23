@@ -4,6 +4,8 @@ import type { Mood, Question } from "./types";
 
 export const sessionName = h("b");
 const sessionTime = <span className="sess-time" title="Session running time" />;
+// filled by session/push.tsx when the relay can send push notifications
+export const pushSlot = <span className="push-slot" />;
 
 export function shell(children: Child[], tag: "main" | "div" = "main") {
   const answering = tag === "main" && location.pathname.startsWith("/a/");
@@ -12,7 +14,7 @@ export function shell(children: Child[], tag: "main" | "div" = "main") {
       <header className="topbar">
         {/* no home link on an answer page: one stray tap would lose a half-filled form */}
         {logo(answering ? undefined : "/")}
-        {answering && [<span className="sess">{sessionName}</span>, sessionTime, bellButton()]}
+        {answering && [<span className="sess">{sessionName}</span>, sessionTime, bellButton(), pushSlot]}
         <span className="e2e" title="End-to-end encrypted">
           {icon("lock")}
           <span>End-to-end encrypted</span>

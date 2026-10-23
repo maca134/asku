@@ -19,6 +19,7 @@ import {
   status,
 } from "../page";
 import type { Answer, Question, Say } from "../types";
+import { offerPush } from "./push";
 import { type Session, sendAnswer } from "./send";
 import { drop, rename, save } from "./storage";
 
@@ -32,6 +33,7 @@ export function listen(session: Session) {
     save(sid, state);
   }
   startClock(state.start);
+  offerPush(session);
   const send: Send = (seqs, answer) => sendAnswer(session, seqs, answer);
 
   let current: OpenForm | null = null;

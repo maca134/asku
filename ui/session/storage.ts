@@ -13,6 +13,7 @@ export type State = {
   token?: string;
   note?: string;
   name?: string;
+  push?: boolean;
 };
 
 export function rename(state: State, name: string | undefined) {

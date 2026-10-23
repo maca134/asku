@@ -88,6 +88,15 @@ export const say: Validator<Say>;
     target: "browser",
   });
   if (!out.success) throw new AggregateError(out.logs, "build failed");
+  // the service worker keeps a fixed name: it is registered by URL and its scope is the folder it's served from
+  const worker = await Bun.build({
+    entrypoints: ["ui/session/worker.ts"],
+    outdir: "dist",
+    naming: "sw.js",
+    minify: true,
+    target: "browser",
+  });
+  if (!worker.success) throw new AggregateError(worker.logs, "build failed");
 
   const tags = await Promise.all(
     out.outputs.map(async (o) => {
