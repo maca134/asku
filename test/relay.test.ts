@@ -102,7 +102,8 @@ test("rate limits session creation per IP", async () => {
 test("serves the page and hashed assets", async () => {
   const dist = mkdtempSync(`${tmpdir()}/asku-dist-`);
   mkdirSync(`${dist}/assets`);
-  writeFileSync(`${dist}/index.html`, "<!doctype html>");
+  for (const f of ["index", "how", "security", "install", "start", "app"]) writeFileSync(`${dist}/${f}.html`, f);
+  writeFileSync(`${dist}/robots.txt`, "User-agent: *");
   writeFileSync(`${dist}/assets/app-abc123.js`, "1");
   writeFileSync(`${dist}/skill.md`, "# asku");
   const s = relay({ dist });
@@ -114,7 +115,11 @@ test("serves the page and hashed assets", async () => {
       expect(res.headers.get("content-type")).toContain("text/html");
       expect(res.headers.get("cache-control")).toBe("no-store");
       expect(res.headers.get("content-security-policy")).toContain("script-src 'self'");
+      expect(await res.text()).toBe(p.startsWith("/a/") ? "app" : p.slice(1) || "index"); // each page its own head
+      expect(res.headers.get("x-robots-tag")).toBe(p.startsWith("/a/") ? "noindex" : null);
     }
+    expect((await at("/j/abcdefghijklmnopqrstuv")).headers.get("x-robots-tag")).toBe("noindex");
+    expect((await at("/robots.txt")).headers.get("content-type")).toContain("text/plain");
     const js = await at("/assets/app-abc123.js");
     expect(js.headers.get("cache-control")).toContain("immutable");
     expect(js.headers.get("content-security-policy")).toContain("default-src 'none'");

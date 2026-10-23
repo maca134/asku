@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /a/
+Disallow: /j/
+Disallow: /s/
+Sitemap: https://asku.dev/sitemap.xml

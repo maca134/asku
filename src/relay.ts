@@ -161,16 +161,24 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
   async function route(req: Request, srv: Server): Promise<Response> {
     const url = new URL(req.url);
     const m = req.method;
-    if (m === "GET" && /^\/(how|security|install|start)?$|^\/[aj]\/[\w-]{22}$/.test(url.pathname)) return file("index.html", "no-store");
+    const page = url.pathname.match(/^\/(how|security|install|start)?$/);
+    if (m === "GET" && page) return file(`${page[1] ?? "index"}.html`, "no-store");
+    if (m === "GET" && /^\/[aj]\/[\w-]{22}$/.test(url.pathname)) {
+      const res = await file("app.html", "no-store");
+      res.headers.set("x-robots-tag", "noindex");
+      return res;
+    }
     const asset = url.pathname.match(/^\/assets\/([\w-]+\.(?:js|css))$/);
     if (m === "GET" && asset) return file(`assets/${asset[1]}`, "public, max-age=31536000, immutable");
     // The skill: SKILL.md, the agent scripts and the schema, as plain text so curl and browsers both just show them.
     if (m === "GET" && /^\/(skill\.md|ask\.sh|ask\.ps1|schema\.json)$/.test(url.pathname))
       return file(url.pathname.slice(1), "no-cache", url.pathname.endsWith(".json") ? "application/json" : "text/plain; charset=utf-8");
+    if (m === "GET" && /^\/(robots\.txt|sitemap\.xml|og\.png|favicon\.(svg|ico)|apple-touch-icon\.png)$/.test(url.pathname))
+      return file(url.pathname.slice(1), "public, max-age=86400");
 
     const [, root, sid, sub, extra] = url.pathname.split("/");
     // Unknown pages get the app, which shows its own not-found page.
-    if (m === "GET" && root !== "s" && root !== "assets") return file("index.html", "no-store", undefined, 404);
+    if (m === "GET" && root !== "s" && root !== "assets") return file("app.html", "no-store", undefined, 404);
     if (root !== "s" || extra !== undefined) return fail(404, "not found");
 
     if (!sid) {

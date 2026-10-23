@@ -230,7 +230,7 @@ code { font-family: var(--mono); font-size: .86em; background: var(--bg-2); bord
 .sec-head { max-width: 44rem; margin: 0 auto 2.75rem; text-align: center; }
 .sec-head .lead { margin: 0 auto; }
 .eyebrow { margin: 0 0 .8rem; font-size: .78rem; font-weight: 650; letter-spacing: .09em; text-transform: uppercase; color: var(--accent-text); }
-h2 { margin: 0 0 1rem; font-size: clamp(1.8rem, 5vw, 2.6rem); line-height: 1.1; letter-spacing: -.035em; font-weight: 730; text-wrap: balance; }
+h2, .sec-head h1 { margin: 0 0 1rem; font-size: clamp(1.8rem, 5vw, 2.6rem); line-height: 1.1; letter-spacing: -.035em; font-weight: 730; text-wrap: balance; }
 h3 { letter-spacing: -.012em; }
 
 .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
@@ -265,6 +265,9 @@ h3 { letter-spacing: -.012em; }
 @media (min-width: 720px) { .packet { top: -3px; left: 0; animation-name: across; } }
 .wire:nth-child(4) .packet { animation-delay: -1.3s; }
 
+.faq { margin: 0; }
+.faq dt { font-weight: 650; margin-top: 1.5rem; }
+.faq dd { margin: .35rem 0 0; color: var(--muted); }
 .points { list-style: none; margin: 0 auto; padding: 0; max-width: 58rem; display: grid; gap: 1rem; }
 @media (min-width: 720px) { .points { grid-template-columns: 1fr 1fr; } }
 .point { display: flex; gap: .95rem; padding: 1.3rem; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
