@@ -1,5 +1,6 @@
 // asku relay: stores opaque envelopes, never sees plaintext. API in README "Relay API".
 import type { Server } from "bun";
+import { type Subscription, sendPush, type Vapid } from "./push";
 import { type Direction, openStore, type Session } from "./store";
 
 export const LIMITS = {
@@ -16,7 +17,7 @@ export const LIMITS = {
 
 const HEADERS = {
   "content-security-policy":
-    "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+    "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
   "referrer-policy": "no-referrer",
   "x-content-type-options": "nosniff",
   "cache-control": "no-store",
@@ -43,6 +44,30 @@ function decodeBase64(value: unknown, length?: number) {
 }
 const isBase64 = (value: unknown, length?: number): value is string => decodeBase64(value, length) !== null;
 const isPublicKey = (value: unknown): value is string => decodeBase64(value, 65)?.[0] === 4;
+
+function decodeBase64url(value: unknown, length: number) {
+  if (typeof value !== "string" || !/^[\w-]+$/.test(value)) return null;
+  try {
+    const bytes = Uint8Array.fromBase64(value, { alphabet: "base64url" });
+    return bytes.length === length ? bytes : null;
+  } catch {
+    return null;
+  }
+}
+
+// Only the big browsers' push services: the endpoint comes from the browser, so it mustn't aim the relay elsewhere.
+export const PUSH_SERVICES =
+  /^https:\/\/([\w-]+\.)*(fcm\.googleapis\.com|push\.services\.mozilla\.com|notify\.windows\.com|push\.apple\.com)\//;
+
+// A PushSubscription's toJSON(), reduced to what sending needs.
+function validSubscription(body: Body | null, services: RegExp): Subscription | null {
+  const endpoint = body?.endpoint;
+  const keys = body?.keys as Body | undefined;
+  if (typeof endpoint !== "string" || endpoint.length > 1024 || !services.test(endpoint)) return null;
+  const { p256dh, auth } = keys ?? {};
+  if (decodeBase64url(p256dh, 65)?.[0] !== 4 || !decodeBase64url(auth, 16)) return null;
+  return { endpoint, p256dh: p256dh as string, auth: auth as string };
+}
 
 // IPv6 clients usually get a whole /64, so it shares one rate-limit quota.
 export function ipKey(ip: string) {
@@ -91,6 +116,8 @@ export function relay({
   dist = `${import.meta.dir}/../dist`,
   holdMs = 25_000,
   ipHeader,
+  vapid,
+  pushServices = PUSH_SERVICES,
 }: {
   port?: number;
   hostname?: string;
@@ -98,6 +125,8 @@ export function relay({
   dist?: string;
   holdMs?: number;
   ipHeader?: string;
+  vapid?: Vapid;
+  pushServices?: RegExp;
 } = {}) {
   const { db, sql, purge, store } = openStore(path);
 
@@ -200,6 +229,9 @@ export function relay({
     const file = pathname.slice(1);
     if (SKILL.test(pathname))
       return serveFile(file, "no-cache", file.endsWith(".json") ? "application/json" : "text/plain; charset=utf-8");
+    if (pathname === "/sw.js") return serveFile(file, "no-cache", "text/javascript; charset=utf-8");
+    if (pathname === "/manifest.webmanifest")
+      return serveFile(file, "public, max-age=86400", "application/manifest+json");
     if (STATIC.test(pathname)) return serveFile(file, "public, max-age=86400");
   }
 
@@ -258,7 +290,30 @@ export function relay({
       return fail(409, "duplicate"); // lost a race with an identical seq
     }
     notify(sid);
+    if (direction === "q") pushQuestion(session);
     return empty();
+  }
+
+  async function setPush(req: Request, session: Session) {
+    if (!authorized(req, session.browserKeyHash)) return fail(401, "unauthorized");
+    if (req.method === "DELETE") {
+      sql.setPush.run(null, session.sid);
+      return empty();
+    }
+    const subscription = validSubscription(await readJson(req), pushServices);
+    if (!subscription) return fail(400, "bad subscription");
+    sql.setPush.run(JSON.stringify(subscription), session.sid);
+    return empty();
+  }
+
+  // The push carries only the sid, which the relay already knows; the browser looks up the session's name itself.
+  function pushQuestion({ sid, push }: Session) {
+    if (!vapid || !push) return;
+    sendPush(vapid, JSON.parse(push), JSON.stringify({ sid }))
+      .then((res) => {
+        if (res.status === 404 || res.status === 410) sql.setPush.run(null, sid); // the browser unsubscribed
+      })
+      .catch(console.error);
   }
 
   async function sessionRoute(req: Request, server: Server<undefined>, url: URL, sid: string, action: string) {
@@ -270,7 +325,16 @@ export function relay({
 
     switch (`${req.method} ${action}`) {
       case "GET ":
-        return json({ pub: session.creatorPub, role: session.role, bound: session.joinerPub !== null });
+        return json({
+          pub: session.creatorPub,
+          role: session.role,
+          bound: session.joinerPub !== null,
+          ...(vapid && { push: vapid.publicKey }),
+        });
+      case "PUT push":
+      case "DELETE push":
+        if (!vapid) return fail(404, "push is off");
+        return setPush(req, session);
       case "DELETE ":
         if (!authorized(req, session.agentKeyHash)) return fail(401, "unauthorized");
         purge(sid);
@@ -356,12 +420,19 @@ export function relay({
   };
 }
 
+// All three, or push notifications are off.
+function vapidFromEnv(): Vapid | undefined {
+  const { ASKU_VAPID_PUBLIC: publicKey, ASKU_VAPID_PRIVATE: privateKey, ASKU_VAPID_SUBJECT: subject } = process.env;
+  if (publicKey && privateKey && subject) return { publicKey, privateKey, subject };
+}
+
 if (import.meta.main) {
   const { server } = relay({
     port: Number(process.env.PORT ?? 8080),
     hostname: process.env.ASKU_HOST, // 127.0.0.1 behind a tunnel, so ASKU_IP_HEADER cannot be spoofed
     db: process.env.ASKU_DB ?? "asku.db",
     ipHeader: process.env.ASKU_IP_HEADER, // e.g. cf-connecting-ip behind Cloudflare
+    vapid: vapidFromEnv(),
   });
   console.log(`asku relay on ${server.url}`);
 }

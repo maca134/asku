@@ -15,6 +15,7 @@ export type State = {
   name?: string;
   asked?: number[];
   active?: number;
+  push?: boolean;
 };
 
 export function rename(state: State, name: string | undefined) {
