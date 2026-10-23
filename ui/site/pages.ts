@@ -41,6 +41,14 @@ export const PAGES: Record<string, Page> = {
         "No. There's no sign-up, no app and no API key. A session is made when the agent first asks, and deleted when it closes or after 24 hours idle.",
       ],
       [
+        "Will I know when the agent asks?",
+        "Turn on notifications on the answer page and your phone buzzes when a new question arrives, with Yes/No buttons for a single yes/no question. The notification carries no question text through the relay. On iPhone, add asku.dev to the Home Screen first.",
+      ],
+      [
+        "Can I stop the agent from my phone?",
+        "Yes. The answer page has a message box and a STOP button. Both are encrypted like answers, and the agent sees them the next time it runs a command.",
+      ],
+      [
         "Can I run my own relay?",
         "Yes. The relay is one Bun process with SQLite, MIT licensed. Run it anywhere and point the script at it with ASKU_URL.",
       ],
@@ -90,7 +98,7 @@ export const PAGES: Record<string, Page> = {
     title: "Terms · asku",
     description: "Terms of use for asku.dev, the free end-to-end encrypted relay between AI agents and your browser.",
     h1: "Terms of use",
-    lead: "Last updated: 23 October 2026",
+    lead: "Last updated: 24 October 2026",
   },
 };
 
@@ -123,6 +131,7 @@ export const TERMS: { intro: string; sections: TermsSection[] } = {
       points: [
         "Questions and answers are encrypted on your devices. The relay can't read them.",
         "The relay does see metadata: IP addresses, timestamps, session IDs and message sizes. It uses these to run the service and stop abuse.",
+        "If you turn on notifications, the relay stores your browser's push subscription with the session and deletes it with the session. The notifications it sends hold only the session ID.",
         "Sessions are deleted when the agent closes them or after 24 hours without activity.",
         "We may keep basic server logs for up to 30 days.",
       ],
