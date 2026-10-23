@@ -82,9 +82,11 @@ const logo = (href?: string) => {
 DOMPurify.addHook("afterSanitizeAttributes", (node) => {
   if (node.tagName === "A") { node.setAttribute("target", "_blank"); node.setAttribute("rel", "noopener noreferrer"); }
 });
+// markdown can't draw controls of its own, so the agent's text can't pose as a field of the form
+const NO_CONTROLS = { FORBID_TAGS: ["form", "input", "button", "textarea", "select", "option"] };
 function md(src: string, extra = "") {
   const div = h("div", { className: `md ${extra}` });
-  div.innerHTML = DOMPurify.sanitize(marked.parse(src, { async: false }) as string);
+  div.innerHTML = DOMPurify.sanitize(marked.parse(src, { async: false }) as string, NO_CONTROLS);
   return div;
 }
 
@@ -640,6 +642,7 @@ function landing() {
       keysPoint(),
       ciphertextPoint(),
       point("link", "The secret rides in the fragment", "The part of the link after `#` never reaches the server. The page checks the agent's key against it, then clears it from history."),
+      point("server", "What you still trust", "The relay serves this page and the scripts, so whoever runs it could ship code that reads your answers. Compare `ask.sh` with its source on GitHub at the release tag, or run your own relay."),
       point("shield", "Small enough to audit", "bash + openssl, PowerShell + .NET and WebCrypto, all checked against the same test vectors. The whole thing is open source.")),
     next("Install the skill", "/install")));
   const homeSecurity = h("section", { className: "sec" }, h("div", { className: "wrap" },

@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { LIMITS, relay } from "../src/relay";
+import { ipKey, LIMITS, relay } from "../src/relay";
 import v from "./vectors.json";
 
 const r = relay({ holdMs: 300 });
@@ -98,6 +98,51 @@ test("rate limits session creation per IP", async () => {
   own.stop();
   expect(statuses.at(-2)).toBe(201);
   expect(statuses.at(-1)).toBe(429);
+});
+
+test("an IPv6 /64 shares one rate-limit quota", async () => {
+  expect(ipKey("2001:db8:1:2::1")).toBe("2001:db8:1:2::/64");
+  expect(ipKey("2001:0db8:0001:0002:aaaa:bbbb:cccc:dddd")).toBe("2001:db8:1:2::/64");
+  expect(ipKey("2001:db8::5")).toBe("2001:db8:0:0::/64");
+  expect(ipKey("1.2.3.4")).toBe("1.2.3.4");
+  const own = relay({ ipHeader: "x-ip" });
+  const statuses = [];
+  for (let i = 0; i < LIMITS.createPerIp + 1; i++) {
+    const res = await fetch(`${own.server.url.href}s`, { method: "POST", headers: { "content-type": "application/json", "x-ip": `2001:db8:1:2::${i.toString(16)}` }, body: JSON.stringify({ pub: v.pubA }) });
+    statuses.push(res.status);
+  }
+  own.stop();
+  expect(statuses.at(-1)).toBe(429);
+});
+
+test("relay-wide caps on sessions and stored bytes", async () => {
+  const own = relay();
+  const url = own.server.url.href.replace(/\/$/, "");
+  const post = (path: string, body: unknown, key?: string) => fetch(url + path, {
+    method: "POST", headers: { "content-type": "application/json", ...(key ? { authorization: `Bearer ${key}` } : {}) }, body: JSON.stringify(body),
+  });
+  const saved = { ...LIMITS };
+  try {
+    const { sid, key } = await (await post("/s", { pub: v.pubA })).json();
+    LIMITS.sessions = 1;
+    expect((await post("/s", { pub: v.pubA })).status).toBe(503);
+    await post(`/s/${sid}/bind`, { pub: v.pubB, mac: v.bind });
+    LIMITS.totalBytes = 10;
+    expect((await post(`/s/${sid}/q`, env("q", 1), key)).status).toBe(503);
+  } finally {
+    Object.assign(LIMITS, saved);
+    own.stop();
+  }
+});
+
+test("caps open listeners per session", async () => {
+  const { sid, key } = await create();
+  await call("POST", `/s/${sid}/bind`, { pub: v.pubB, mac: v.bind });
+  await call("POST", `/s/${sid}/q`, env("q", 1), key); // a feed's headers flush with its first event
+  const feeds =await Promise.all(Array.from({ length: LIMITS.listeners }, () => fetch(`${base}/s/${sid}/q`)));
+  expect(feeds.every((f) => f.status === 200)).toBe(true);
+  expect((await call("GET", `/s/${sid}/a?after=0`)).status).toBe(429);
+  await Promise.all(feeds.map((f) => f.body!.cancel()));
 });
 
 test("serves the page and hashed assets", async () => {

@@ -9,6 +9,9 @@ export const LIMITS = {
   ttlMs: 24 * 3600_000,
   createPerIp: 20,
   createWindowMs: 10 * 60_000,
+  sessions: 10_000, // relay-wide caps, so no number of clients can fill the disk
+  totalBytes: 1 << 30,
+  listeners: 8, // open feeds and long-polls per session
 };
 
 const HEADERS = {
@@ -16,6 +19,7 @@ const HEADERS = {
   "referrer-policy": "no-referrer",
   "x-content-type-options": "nosniff",
   "cache-control": "no-store",
+  "strict-transport-security": "max-age=31536000; includeSubDomains",
 };
 
 type Dir = "q" | "a";
@@ -40,6 +44,15 @@ function b64(s: unknown, len?: number) {
 }
 
 const isPub = (s: unknown) => b64(s, 65)?.[0] === 4;
+
+// IPv6 clients usually get a whole /64, so it shares one rate-limit quota.
+export function ipKey(ip: string) {
+  if (!ip.includes(":") || ip.startsWith("::ffff:")) return ip;
+  const [head, tail] = ip.split("::");
+  const a = head ? head.split(":") : [], b = tail ? tail.split(":") : [];
+  const full = tail === undefined ? a : [...a, ...Array(8 - a.length - b.length).fill("0"), ...b];
+  return `${full.slice(0, 4).map((x) => parseInt(x, 16).toString(16)).join(":")}::/64`;
+}
 
 function envelope(x: any, dir: Dir) {
   if (!x || typeof x !== "object" || Object.keys(x).length !== 6) return null;
@@ -81,6 +94,8 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
     has: db.query("select 1 from m where sid = ? and dir = ? and seq = ?"),
     insert: db.query("insert into m (sid, dir, seq, env) values (?, ?, ?, ?)"),
     after: db.query<{ seq: number; env: string }, [string, string, number]>("select seq, env from m where sid = ? and dir = ? and seq > ? order by seq"),
+    // ponytail: full scan of s per write; fine at LIMITS.sessions rows, keep a running total if that grows.
+    totals: db.query<{ n: number; b: number }, []>("select count(*) n, coalesce(sum(bytes), 0) b from s"),
     expired: db.query<{ sid: string }, [number]>("select sid from s where touched < ?"),
     delS: db.query("delete from s where sid = ?"),
     delM: db.query("delete from m where sid = ?"),
@@ -184,10 +199,11 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
     if (!sid) {
       if (m !== "POST") return fail(405, "method not allowed");
       const ip = (ipHeader ? req.headers.get(ipHeader) : srv.requestIP(req)?.address) ?? "?";
-      if (limited(ip)) return fail(429, "too many sessions");
+      if (limited(ipKey(ip))) return fail(429, "too many sessions");
       const b = await body(req);
       const role = b?.role ?? "agent";
       if (!isPub(b?.pub) || (role !== "agent" && role !== "browser")) return fail(400, "bad pub or role");
+      if (sql.totals.get()!.n >= LIMITS.sessions) return fail(503, "relay full");
       const s = { sid: rand(16), key: rand(32) };
       const hash = sha(s.key);
       sql.create.run(s.sid, role, b.pub, role === "agent" ? hash : null, role === "browser" ? hash : null, Date.now());
@@ -197,6 +213,7 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
     const s = sql.get.get(sid);
     if (!s) return fail(404, "no such session");
     const after = Number(url.searchParams.get("after") ?? 0) || 0;
+    if (m === "GET" && sub && (subs.get(sid)?.size ?? 0) >= LIMITS.listeners) return fail(429, "too many listeners");
 
     switch (`${m} ${sub ?? ""}`) {
       case "GET ":
@@ -245,6 +262,7 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
           : seq === 0 ? s.role === "browser" : sql.has.get(sid, "q", seq) !== null;
         if (!seqOk) return fail(409, "bad seq");
         if (s.bytes + env.length > LIMITS.sessionBytes) return fail(413, "session full");
+        if (sql.totals.get()!.b + env.length > LIMITS.totalBytes) return fail(503, "relay full");
         try {
           store(sid, dir, seq, env);
         } catch {

@@ -1,5 +1,7 @@
 name: ci
 on: [push, pull_request]
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -12,8 +14,8 @@ jobs:
       # Windows: Git Bash, not the WSL bash.exe in System32
       ASKU_BASH: ${{ matrix.os == 'windows-latest' && 'C:\Program Files\Git\bin\bash.exe' || 'bash' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - if: runner.os == 'macOS'
         run: echo "$(brew --prefix openssl@3)/bin" >> "$GITHUB_PATH"
       - run: bun install --frozen-lockfile
