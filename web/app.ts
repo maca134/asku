@@ -99,6 +99,7 @@ function stateEl(kind: Kind, title: string, detail?: string, ...extra: Kid[]) {
 const status = (kind: Kind, title: string, detail?: string, ...extra: Kid[]) => app.replaceChildren(shell([stateEl(kind, title, detail, ...extra)]));
 const live = (text: string) => h("p", { className: "live" }, h("span", { className: "pulse" }), text);
 const home = () => h("a", { className: "btn btn-secondary", href: "/" }, `Go to ${location.host}`);
+const startNew = () => h("a", { className: "btn btn-secondary", href: "/start" }, "Start a new session");
 
 // ---- persistence: the fragment is gone after first load, so key pair B and the write key live in IndexedDB.
 // ponytail: IndexedDB unavailable (some private modes) means a reload loses the session; fine, the agent can start a new one.
@@ -298,7 +299,7 @@ function render(sid: string, keys: Keys, st: State, seq: number, q: Question) {
   if (document.hidden) document.title = "● asku: question waiting";
 }
 
-document.addEventListener("visibilitychange", () => { if (!document.hidden) document.title = "asku"; });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && document.title.startsWith("●")) document.title = "asku"; });
 
 // Text with a copy button. It wraps, so a long link stays readable on a phone.
 function copyable(text: string, prompt?: string, label = "Copy") {
@@ -316,11 +317,13 @@ function copyable(text: string, prompt?: string, label = "Copy") {
 // ---- landing
 const installLine = () => `Install the skill at ${location.origin}/skill.md`;
 
+const pages: Record<string, string> = { "/how": "How it works", "/security": "Security", "/install": "Install", "/start": "Start" };
+const next = (label: string, href: string) => h("div", { className: "next" }, h("a", { className: "btn btn-primary btn-lg", href }, label, icon("arrow")));
+
 function landing() {
+  const path = location.pathname;
   const nav = h("nav", { className: "nav", ariaLabel: "Main" },
-    h("a", { href: "#how", className: "nav-hide", textContent: "How it works" }),
-    h("a", { href: "#security", className: "nav-hide", textContent: "Security" }),
-    h("a", { href: "#install", textContent: "Install" }),
+    ...Object.entries(pages).map(([href, textContent]) => h("a", { href, textContent, ...(href === path && { ariaCurrent: "page" }) })),
     h("a", { href: "https://github.com/maca134/asku", className: "nav-gh", ariaLabel: "asku on GitHub" }, icon("github")));
   const header = h("header", { className: "site-header" }, h("div", { className: "wrap bar" }, logo("/"), nav));
 
@@ -330,8 +333,8 @@ function landing() {
       h("h1", {}, "Your agent asks.", h("br"), h("span", { className: "grad", textContent: "You answer from anywhere." })),
       p("asku turns questions from Claude Code, Codex, Cursor or any other agent into a rich form you answer on your phone. The agent gets JSON back and keeps working. The relay in between only ever sees ciphertext.", "lead"),
       h("div", { className: "ctas" },
-        h("a", { className: "btn btn-primary btn-lg", href: "#install" }, "Install the skill", icon("arrow")),
-        h("a", { className: "btn btn-secondary btn-lg", href: "#start" }, "Start from the website"))),
+        h("a", { className: "btn btn-primary btn-lg", href: "/install" }, "Install the skill", icon("arrow")),
+        h("a", { className: "btn btn-secondary btn-lg", href: "/start" }, "Start from the website"))),
     h("div", { className: "wrap" }, demo()));
 
   const step = (n: string, ico: string, title: string, text: string) =>
@@ -346,7 +349,7 @@ function landing() {
 
   const node = (ico: string, title: string, sub: string, cls = "") => h("div", { className: `node ${cls}` }, h("span", { className: "node-icon" }, icon(ico)), h("strong", { textContent: title }), h("span", { className: "node-sub", textContent: sub }));
   const point = (ico: string, title: string, text: string) => h("li", { className: "point" }, h("span", { className: "point-icon" }, icon(ico)), h("div", {}, h("h3", { textContent: title }), p(text)));
-  const security = h("section", { className: "sec sec-alt", id: "security" }, h("div", { className: "wrap" },
+  const security = h("section", { className: "sec" }, h("div", { className: "wrap" },
     head("Security", "The relay can't read your answers", "Encryption happens on your agent's machine and in your browser. The server in the middle stores opaque envelopes and deletes them when the session ends."),
     h("div", { className: "flow", ariaHidden: "true" },
       node("terminal", "Your agent", "key pair A"),
@@ -358,15 +361,17 @@ function landing() {
       point("key", "Keys stay on the endpoints", "P-256 key pairs are made on the agent's machine and in your browser, where the private key is non-extractable."),
       point("lock", "Ciphertext only", "Every message is AES-256-CBC with an HMAC-SHA256 tag, checked before decrypting. Sessions are purged on close or after 24h idle."),
       point("link", "The secret rides in the fragment", "The part of the link after `#` never reaches the server. The page checks the agent's key against it, then clears it from history."),
-      point("shield", "Small enough to audit", "bash + openssl, PowerShell + .NET and WebCrypto, all checked against the same test vectors. The whole thing is open source."))));
+      point("shield", "Small enough to audit", "bash + openssl, PowerShell + .NET and WebCrypto, all checked against the same test vectors. The whole thing is open source.")),
+    next("Install the skill", "/install")));
 
-  const controls = h("section", { className: "sec", id: "form" }, h("div", { className: "wrap split" },
+  const controls = h("section", { className: "sec sec-alt" }, h("div", { className: "wrap" }, h("div", { className: "split" },
     h("div", { className: "split-copy" },
       head("The form", "Built for answering with one thumb", "Agents get five controls, markdown for context, and a comment box on every question. Try it: this is the real form, and the panel shows exactly what your agent would receive."),
       h("ul", { className: "chips" }, ...["Yes / no", "Pick one", "Pick several", "Text", "Number", "Markdown", "Comments", "Note"].map((c) => h("li", { textContent: c })))),
-    showcase()));
+    showcase()),
+    next("Install the skill", "/install")));
 
-  const install = h("section", { className: "sec sec-alt", id: "install" }, h("div", { className: "wrap narrow" },
+  const install = h("section", { className: "sec" }, h("div", { className: "wrap narrow" },
     head("Install", "Tell your agent to install it", "Any agent that can run shell commands works: Claude Code, Codex, Cursor, Gemini CLI and the rest. It saves the skill and the script for your OS."),
     h("div", { className: "card install" },
       h("p", { className: "card-label", textContent: "Say this to your agent" }),
@@ -378,9 +383,9 @@ function landing() {
         h("p", { className: "card-label", textContent: "Windows · PowerShell 5.1+, nothing else" }),
         copyable(`iwr ${location.origin}/ask.ps1 -OutFile ask.ps1`, ">"),
         p("Then point your agent at `/skill.md` for the commands and the question format.", "fine"))),
-  ));
+    next("Start from the website", "/start")));
 
-  const start = h("section", { className: "sec", id: "start" }, h("div", { className: "wrap narrow" },
+  const start = h("section", { className: "sec" }, h("div", { className: "wrap narrow" },
     head("Start here", "Or start from the website", "Already in a chat with your agent? Write it a message, get a link, and paste the link into the chat. The agent joins and asks you here."),
     startCard()));
 
@@ -392,9 +397,24 @@ function landing() {
       h("a", { href: "/schema.json", textContent: "schema.json" }),
       h("a", { href: "https://github.com/maca134/asku/blob/main/LICENSE", textContent: "MIT License" }))));
 
-  app.replaceChildren(header, h("main", { className: "landing" }, hero, how, security, controls, install, start), footer);
-  if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+  const missing = h("section", { className: "sec" }, h("div", { className: "wrap narrow" }, stateEl("error", "Page not found", "There's nothing at this address."), next("Go home", "/")));
+  const body = { "/": [hero], "/how": [how, controls], "/security": [security], "/install": [install], "/start": [start] }[path] ?? [missing];
+  document.title = path === "/" ? "asku" : `${pages[path] ?? "Not found"} · asku`;
+  app.replaceChildren(header, h("main", { className: "landing" }, ...body), footer);
 }
+
+// Links between the site's pages swap the page without a reload.
+document.addEventListener("click", (e) => {
+  const a = (e.target as Element).closest?.("a");
+  if (!a || !document.querySelector(".landing") || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const url = new URL(a.href);
+  if (url.origin !== location.origin || !(url.pathname === "/" || url.pathname in pages)) return;
+  e.preventDefault();
+  if (url.pathname !== location.pathname) history.pushState(null, "", url.pathname);
+  landing();
+  scrollTo(0, 0);
+});
+addEventListener("popstate", () => { if (document.querySelector(".landing")) landing(); });
 
 function head(eyebrow: string, title: string, lead: string) {
   return h("div", { className: "sec-head" }, h("p", { className: "eyebrow", textContent: eyebrow }), h("h2", { textContent: title }), p(lead, "lead"));
@@ -444,12 +464,12 @@ async function waitForAgent(sid: string, st: State) {
 
   for (;;) {
     const res = await fetch(`/s/${sid}/bind`).catch(() => null);
-    if (res?.status === 404) return status("error", "This session has expired", "Start a new one from the home page.", home());
+    if (res?.status === 404) return status("error", "This session has expired", "Start a new one to keep going.", startNew());
     if (res?.status === 200) {
       const { pub, mac } = await res.json();
       if (!(await checkBind(token, Uint8Array.fromBase64(pub), mac))) {
         drop(sid);
-        return status("error", "This session is not safe", "Something other than your agent used the link. Start a new one.", home());
+        return status("error", "This session is not safe", "Something other than your agent used the link. Start a new one.", startNew());
       }
       const keys = await deriveKeys(st.priv, Uint8Array.fromBase64(pub));
       await send(sid, keys, st, 0, { note: st.note ?? "" }); // the opening note is answer 0
@@ -574,7 +594,7 @@ function demo() {
       if (fast) return;
       for (let t = 0; t < ms;) {
         await sleep(40);
-        if (my !== gen) throw STOP;
+        if (my !== gen || !root.isConnected) throw STOP;
         if (!paused && visible && !document.hidden) t += 40;
       }
     };
@@ -690,7 +710,7 @@ function demo() {
   // Start after the page has laid out, so the phone has a size to scroll in.
   requestAnimationFrame(async () => {
     if (still) return play(true);
-    for (;;) await play(false).catch((x) => { if (x !== STOP) throw x; });
+    while (root.isConnected) await play(false).catch((x) => { if (x !== STOP) throw x; });
   });
   return root;
 }
