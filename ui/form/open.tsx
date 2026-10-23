@@ -16,10 +16,11 @@ import {
 import type { Answer, Question } from "../types";
 import type { Field } from "./fields";
 import { buildForm, type Form } from "./form";
+import { countShown } from "./when";
 
 export type Batch = [seq: number, question: Question];
 export type Send = (seqs: number[], answer: Answer) => Promise<void>;
-type Part = { seq: number; fields: Field[]; footer: HTMLElement; countdown?: HTMLElement };
+type Part = { seq: number; fields: Field[]; footer: HTMLElement; sendLabel: HTMLElement; countdown?: HTMLElement };
 
 export const sentPanel = () =>
   statePanel(
@@ -85,6 +86,9 @@ export class OpenForm {
       event.preventDefault();
       this.submit(this.parts);
     };
+    // an answer can show or hide a dependent, which changes how many each send button sends
+    this.form.form.addEventListener("input", () => this.relabel());
+    this.form.form.addEventListener("change", () => this.relabel());
 
     this.addPart(seq, this.form.fields.slice(), question);
     for (const batch of rest) this.add(batch);
@@ -104,7 +108,16 @@ export class OpenForm {
     this.names.push(batchName(batch));
     this.addPart(seq, fields, batch);
     const replayed = Date.now() - this.opened < 1000;
-    if (!replayed) this.flagNew(elements[0], batch.questions.length);
+    if (!replayed) this.flagNew(elements[0], countShown(fields));
+  }
+
+  // Answered without this page, from a notification's buttons.
+  answeredElsewhere(seq: number) {
+    const part = this.parts.find((part) => part.seq === seq);
+    if (!part || this.sending) return;
+    if (this.parts.length > 1) return this.markSent([part]);
+    this.close(feedEvent("check", `Answered: ${this.names.join(" · ")}`));
+    this.done();
   }
 
   private flagNew(element: Element, count: number) {
@@ -120,16 +133,24 @@ export class OpenForm {
   }
 
   private addPart(seq: number, fields: Field[], batch: Question) {
-    const part: Part = { seq, fields, footer: <div className="batch-foot" /> };
+    const part: Part = { seq, fields, footer: <div className="batch-foot" />, sendLabel: <span /> };
     part.footer.append(
       <button type="button" className="btn btn-secondary btn-sm" onclick={() => this.submit([part])}>
-        Send {fields.length === 1 ? "this answer" : `these ${fields.length} answers`}
+        {part.sendLabel}
       </button>,
     );
     fields[fields.length - 1].element.after(part.footer);
     this.parts.push(part);
+    this.relabel();
     this.markMulti();
     if (batch.deadline) this.startCountdown(part, ((batch.sent ?? Date.now() / 1000) + batch.deadline) * 1000);
+  }
+
+  private relabel() {
+    for (const part of this.parts) {
+      const count = countShown(part.fields);
+      part.sendLabel.textContent = count === 1 ? "Send this answer" : `Send these ${count} answers`;
+    }
   }
 
   private markMulti() {
@@ -220,7 +241,7 @@ export class OpenForm {
       this.form.note.focus();
       return;
     }
-    const skipped = parts.flatMap((part) => part.fields.map((f) => f.item.id));
+    const skipped = parts.flatMap((part) => part.fields.map((field) => field.item.id));
     return { answers: {}, skipped, comments: {}, note, declined: true };
   }
 
@@ -251,7 +272,7 @@ export class OpenForm {
       part.footer.replaceWith(
         <p className="batch-sent">
           {icon("check")}
-          Sent {answers(part.fields.length)}
+          Sent {answers(countShown(part.fields))}
         </p>,
       );
       this.drop(part);

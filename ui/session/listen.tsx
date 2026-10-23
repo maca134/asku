@@ -3,10 +3,12 @@ import { open } from "../../shared/crypto";
 import { app } from "../dom";
 import type { Form } from "../form/form";
 import { type Batch, OpenForm, type Send } from "../form/open";
+import { conditionProblem } from "../form/when";
 import { question as validQuestion, say as validSay } from "../gen/validate.js";
 import {
   addToFeed,
   batchName,
+  chatSlot,
   feedEvent,
   homeLink,
   live,
@@ -19,8 +21,10 @@ import {
   status,
 } from "../page";
 import type { Answer, Question, Say } from "../types";
+import { chat } from "./chat";
+import { offerPush } from "./push";
 import { type Session, sendAnswer } from "./send";
-import { drop, save } from "./storage";
+import { drop, markAsked, rename, save } from "./storage";
 
 export function listen(session: Session) {
   const { sid, keys, state } = session;
@@ -32,6 +36,7 @@ export function listen(session: Session) {
     save(sid, state);
   }
   startClock(state.start);
+  offerPush(session);
   const send: Send = (seqs, answer) => sendAnswer(session, seqs, answer);
 
   let current: OpenForm | null = null;
@@ -71,22 +76,26 @@ export function listen(session: Session) {
 
   const place = async (seq: number, message: Question | Say) => {
     if ("say" in message) {
-      if (validSay(message)) say(message.say);
+      // the schema can't compare two fields: done <= total is checked here
+      if (validSay(message) && !(message.progress && message.progress.done > message.progress.total)) say(message);
       return;
     }
     const valid = validQuestion(message);
     // no name yet: the first title will do
     if (valid && (message.name || (!sessionName.textContent && message.title)))
       nameSession(message.name ?? message.title!);
+    if (valid && rename(state, message.name ?? (state.name ? undefined : message.title))) save(sid, state);
     if (state.answered.includes(seq)) {
       if (valid) addToFeed(feedEvent("check", `Answered: ${batchName(message)}`));
       return;
     }
+    if (markAsked(state, seq)) save(sid, state);
     if (current?.sending) {
       deferred.push([seq, message]);
       return;
     }
-    const problem = !valid ? schemaErrors() : current ? clash(current.form, message) : null;
+    if (!valid) return reject(seq, schemaErrors());
+    const problem = conditionProblem(message.questions) ?? (current ? clash(current.form, message) : null);
     if (problem) return reject(seq, problem);
     if (current) current.add([seq, message]);
     else current = new OpenForm([[seq, message]], send, formDone);
@@ -108,10 +117,20 @@ export function listen(session: Session) {
     );
   };
 
+  queue(() => chat(session)); // first in the queue: the user's earlier messages before the replayed questions
+  navigator.serviceWorker?.addEventListener("message", ({ data }) => {
+    const seq = data?.answered;
+    if (data?.sid !== sid || !Number.isSafeInteger(seq)) return;
+    queue(async () => {
+      if (!state.answered.includes(seq)) state.answered.push(seq);
+      current?.answeredElsewhere(seq);
+    });
+  });
   events.addEventListener("q", (event) => queue(() => receive(Number(event.lastEventId), event.data)));
   events.addEventListener("close", () => {
     events.close();
     drop(sid);
+    chatSlot.replaceChildren();
     status(
       "done",
       "Session ended",
@@ -123,15 +142,17 @@ export function listen(session: Session) {
     );
   });
   events.onerror = () => {
-    if (events.readyState === EventSource.CLOSED)
+    if (events.readyState === EventSource.CLOSED) {
+      chatSlot.replaceChildren();
       return status("error", "This session has ended or expired", undefined, newSessionLink(), homeLink());
+    }
     showReconnecting(events);
   };
 }
 
 // Why a batch can't join the open form. The agent client checks the same; this only guards the merged answer.
 function clash(form: Form, batch: Question) {
-  const ids = new Set(form.fields.map((f) => f.item.id));
+  const ids = new Set(form.fields.map((field) => field.item.id));
   const repeated = batch.questions.map((item) => item.id).filter((id) => ids.has(id));
   if (repeated.length) return `ids already in the open form: ${repeated.join(", ")}`;
   if (form.fields.length + batch.questions.length > 50) return "the open form would have more than 50 questions";

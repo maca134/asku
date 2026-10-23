@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://asku.dev/schema.json",
   "title": "asku plaintext payloads",
-  "description": "Plaintext inside the encrypted envelope. dir=q carries a Question, dir=a carries an Answer.",
+  "description": "Plaintext inside the encrypted envelope. dir=q carries a Question, dir=a carries an Answer, dir=m a Message.",
   "$defs": {
     "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
     "markdown": { "type": "string", "maxLength": 65536 },
@@ -22,15 +22,35 @@
         }
       ]
     },
+    "day": { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$" },
+    "minute": {
+      "type": "string",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d$"
+    },
+    "other": {
+      "type": "boolean",
+      "description": "Adds an \"Other\" option with a text box. A write-in comes back as a plain value; a default matching no option pre-fills the box."
+    },
+    "when": {
+      "type": "object",
+      "description": "Show this question only when an earlier question in the same batch has this answer: true/false for confirm, an option value for single, and for multi, an option value it contains. Hidden questions are never required and come back in skipped.",
+      "required": ["id", "is"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "is": { "type": ["boolean", "string"], "minLength": 1, "maxLength": 200 }
+      }
+    },
     "item": {
       "type": "object",
       "required": ["id", "type", "label"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
-        "type": { "enum": ["confirm", "single", "multi", "text", "number"] },
+        "type": { "enum": ["confirm", "single", "multi", "review", "rank", "text", "number", "date"] },
         "label": { "type": "string", "minLength": 1, "maxLength": 500 },
         "md": { "$ref": "#/$defs/markdown", "description": "Per-question markdown context." },
-        "required": { "type": "boolean" }
+        "required": { "type": "boolean" },
+        "when": { "$ref": "#/$defs/when" }
       },
       "allOf": [
         {
@@ -42,6 +62,7 @@
               "label": true,
               "md": true,
               "required": true,
+              "when": true,
               "default": { "type": "boolean" }
             },
             "additionalProperties": false
@@ -57,8 +78,10 @@
               "label": true,
               "md": true,
               "required": true,
+              "when": true,
               "options": { "type": "array", "items": { "$ref": "#/$defs/option" }, "minItems": 1, "maxItems": 100 },
-              "default": { "type": "string" }
+              "default": { "type": "string" },
+              "other": { "$ref": "#/$defs/other" }
             },
             "additionalProperties": false
           }
@@ -73,10 +96,46 @@
               "label": true,
               "md": true,
               "required": true,
+              "when": true,
               "options": { "type": "array", "items": { "$ref": "#/$defs/option" }, "minItems": 1, "maxItems": 100 },
               "default": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
               "min": { "type": "integer", "minimum": 0 },
-              "max": { "type": "integer", "minimum": 1 }
+              "max": { "type": "integer", "minimum": 1 },
+              "other": { "$ref": "#/$defs/other" }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "review" } } },
+          "then": {
+            "description": "Approve or reject each option. Answered as a map of option value to boolean; undecided options are left out.",
+            "required": ["options"],
+            "properties": {
+              "id": true,
+              "type": true,
+              "label": true,
+              "md": true,
+              "required": true,
+              "when": true,
+              "options": { "type": "array", "items": { "$ref": "#/$defs/option" }, "minItems": 1, "maxItems": 100 }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "rank" } } },
+          "then": {
+            "description": "Put the options in order. Answered as every option value, first to last.",
+            "required": ["options"],
+            "properties": {
+              "id": true,
+              "type": true,
+              "label": true,
+              "md": true,
+              "required": true,
+              "when": true,
+              "options": { "type": "array", "items": { "$ref": "#/$defs/option" }, "minItems": 1, "maxItems": 100 }
             },
             "additionalProperties": false
           }
@@ -90,6 +149,7 @@
               "label": true,
               "md": true,
               "required": true,
+              "when": true,
               "default": { "type": "string" },
               "placeholder": { "type": "string", "maxLength": 200 },
               "multiline": { "type": "boolean" },
@@ -107,12 +167,53 @@
               "label": true,
               "md": true,
               "required": true,
+              "when": true,
               "default": { "type": "number" },
               "min": { "type": "number" },
               "max": { "type": "number" },
-              "step": { "type": "number", "exclusiveMinimum": 0 }
+              "step": { "type": "number", "exclusiveMinimum": 0 },
+              "display": {
+                "enum": ["stepper", "slider"],
+                "description": "slider shows a range input; it needs min and max. Still answered as a number."
+              }
             },
-            "additionalProperties": false
+            "additionalProperties": false,
+            "if": { "required": ["display"], "properties": { "display": { "const": "slider" } } },
+            "then": { "required": ["min", "max"] }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "date" } } },
+          "then": {
+            "description": "A date from the native picker. min/max/default have no offset and are read as the user's local time. Answered as YYYY-MM-DD, or YYYY-MM-DDTHH:mm±hh:mm with time: true.",
+            "properties": {
+              "id": true,
+              "type": true,
+              "label": true,
+              "md": true,
+              "required": true,
+              "when": true,
+              "time": { "type": "boolean" },
+              "default": true,
+              "min": true,
+              "max": true
+            },
+            "additionalProperties": false,
+            "if": { "required": ["time"], "properties": { "time": { "const": true } } },
+            "then": {
+              "properties": {
+                "default": { "$ref": "#/$defs/minute" },
+                "min": { "$ref": "#/$defs/minute" },
+                "max": { "$ref": "#/$defs/minute" }
+              }
+            },
+            "else": {
+              "properties": {
+                "default": { "$ref": "#/$defs/day" },
+                "min": { "$ref": "#/$defs/day" },
+                "max": { "$ref": "#/$defs/day" }
+              }
+            }
           }
         }
       ]
@@ -154,7 +255,28 @@
       "required": ["say"],
       "additionalProperties": false,
       "properties": {
-        "say": { "type": "string", "minLength": 1, "maxLength": 10000 }
+        "say": { "type": "string", "minLength": 1, "maxLength": 10000 },
+        "progress": {
+          "description": "Makes the update a progress bar, labelled by say. A later update with the same say moves that bar instead of adding a line. done must not exceed total: the page ignores an update where it does.",
+          "type": "object",
+          "required": ["done", "total"],
+          "additionalProperties": false,
+          "properties": {
+            "done": { "type": "integer", "minimum": 0 },
+            "total": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "message": {
+      "description": "dir=m: the user writing to the agent outside any form, or pressing STOP. The client prints it on the agent's next call.",
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "message": { "type": "string", "minLength": 1, "maxLength": 10000 },
+        "stop": { "const": true, "description": "Stop working and confirm with the user." }
       }
     },
     "answer": {
@@ -166,9 +288,10 @@
           "type": "object",
           "propertyNames": { "$ref": "#/$defs/id" },
           "additionalProperties": {
-            "description": "confirm: boolean, single/text: string, multi: string[], number: number.",
-            "type": ["boolean", "string", "number", "array"],
-            "items": { "type": "string" }
+            "description": "confirm: boolean, single/text: string, multi/rank: string[], number: number, date: string, review: {value: boolean}.",
+            "type": ["boolean", "string", "number", "array", "object"],
+            "items": { "type": "string" },
+            "additionalProperties": { "type": "boolean" }
           }
         },
         "skipped": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true },

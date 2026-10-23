@@ -21,6 +21,20 @@ const r = relay({ holdMs: 500 });
 afterAll(() => r.stop());
 const base = r.server.url.href.replace(/\/$/, "");
 
+// In front of the relay for the agent client: records each request line, to check what the client asks for.
+const requests: string[] = [];
+const recorder = Bun.serve({
+  port: 0,
+  async fetch(req) {
+    const { pathname, search } = new URL(req.url);
+    requests.push(`${req.method} ${pathname}${search}`);
+    const body = req.method === "GET" || req.method === "HEAD" ? undefined : await req.arrayBuffer();
+    return fetch(base + pathname + search, { method: req.method, headers: req.headers, body });
+  },
+});
+afterAll(() => recorder.stop(true));
+const recorded = recorder.url.href.replace(/\/$/, "");
+
 const post = (path: string, body: unknown, key?: string) =>
   fetch(base + path, {
     method: "POST",
@@ -82,6 +96,11 @@ function peer(sid: string, keys: Keys, key: string) {
     },
     async answer(seq: number, answer: unknown) {
       expect((await post(`/s/${sid}/a`, await seal(keys, sid, "a", seq, JSON.stringify(answer)), key)).status).toBe(
+        204,
+      );
+    },
+    async message(seq: number, message: unknown) {
+      expect((await post(`/s/${sid}/m`, await seal(keys, sid, "m", seq, JSON.stringify(message)), key)).status).toBe(
         204,
       );
     },
@@ -261,7 +280,7 @@ for (const c of clients) {
   test.skipIf(!c.on)(
     `${c.name} says things and gives up at a deadline`,
     async () => {
-      const { home, run } = agent(c.cmd, { ASKU_URL: base, ASKU_SESSION: "t", ASKU_WAIT: "30" });
+      const { home, run } = agent(c.cmd, { ASKU_URL: recorded, ASKU_SESSION: "t", ASKU_WAIT: "30" });
       const late = `${home}/late.json`;
       writeFileSync(
         late,
@@ -292,18 +311,67 @@ for (const c of clients) {
       expect(res.out).toContain("Said");
       expect(await b.question(1)).toEqual({ say: "queued" }); // the timed-out batch never went out, so no gap
       expect(await b.question(2)).toEqual({ say: text });
+      res = await run(["say", "Tests", "--progress", "42/50"]);
+      expect(res.code).toBe(0);
+      expect(await b.question(3)).toEqual({ say: "Tests", progress: { done: 42, total: 50 } });
+      for (const bad of ["51/50", "1/0", "-1/5", "x"])
+        expect((await run(["say", "Tests", "--progress", bad])).code).toBe(1);
+      expect((await run(["say", "--progress", "1/2"])).code).toBe(1); // a bar needs a label
       const before = Math.floor(Date.now() / 1000);
       res = await run(["wait"]);
       expect(res.code).toBe(1); // a say is never answered
       await run(["add", late]);
-      const q = await b.question(3);
+      const q = await b.question(4);
       expect(q.deadline).toBe(2);
       expect(q.mood).toBe("nervous");
       expect(q.sent).toBeGreaterThanOrEqual(before);
+      // a say is marked so the relay sends no "new questions" push for it
+      const posts = requests.filter((line) => line.startsWith(`POST /s/${b.sid}/q`));
+      expect(posts).toEqual([...Array(3).fill(`POST /s/${b.sid}/q?push=0`), `POST /s/${b.sid}/q`]);
       res = await run(["wait"]);
       expect(JSON.parse(res.out).timeout).toBe(true);
-      await b.answer(3, { answers: { x: true }, skipped: [], comments: {}, note: "" }); // too late: nobody is listening
+      await b.answer(4, { answers: { x: true }, skipped: [], comments: {}, note: "" }); // too late: nobody is listening
       expect((await run(["wait"])).code).toBe(1);
+
+      expect((await run(["close"])).code).toBe(0);
+    },
+    120_000,
+  );
+
+  test.skipIf(!c.on)(
+    `${c.name} prints the user's messages once, and STOP as exit 3`,
+    async () => {
+      const { home, run } = agent(c.cmd, { ASKU_URL: base, ASKU_SESSION: "t", ASKU_WAIT: "30" });
+      const lines = (out: string) => out.trimEnd().split("\n");
+      const link = (await run(["ask", `${home}/q.json`])).out.match(/https?:\/\/\S+#\S+/)![0];
+      const b = await browser(link);
+
+      // a message alone ends the wait early, ahead of the PENDING it would print later
+      const waiting = run(["wait"]);
+      await b.question(1);
+      const text = 'use "staging" — 日本語';
+      await b.message(1, { message: text });
+      let res = await waiting;
+      expect(res.code).toBe(2);
+      expect(JSON.parse(lines(res.out)[0])).toEqual({ message: text });
+      expect(lines(res.out)[1]).toBe("PENDING");
+
+      // with an answer: messages first, the answer JSON last
+      const a1 = { answers: { go: true }, skipped: [], comments: {}, note: "" };
+      await b.message(2, { message: "also lint" });
+      await b.answer(1, a1);
+      res = await run(["wait"]);
+      expect(res.code).toBe(0);
+      expect(lines(res.out).map((line) => JSON.parse(line))).toEqual([{ message: "also lint" }, a1]);
+
+      // say picks them up too; STOP makes it exit 3
+      await b.message(3, { stop: true });
+      res = await run(["say", "stopping"]);
+      expect(res.code).toBe(3);
+      expect(lines(res.out)).toEqual(['{"stop":true}', "Said."]);
+      res = await run(["say", "stopped"]);
+      expect([res.code, res.out]).toEqual([0, "Said.\n"]); // each message only once
+      expect((await b.question(3)).say).toBe("stopped");
 
       expect((await run(["close"])).code).toBe(0);
     },

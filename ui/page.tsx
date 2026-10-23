@@ -1,9 +1,13 @@
 // The app's page frame: top bar, the session feed, status screens and the bell.
 import { app, type Child, codeSpans, h, icon, logo, markdown } from "./dom";
-import type { Mood, Question } from "./types";
+import type { Mood, Question, Say } from "./types";
 
 export const sessionName = h("b");
 const sessionTime = <span className="sess-time" title="Session running time" />;
+// filled by session/push.tsx when the relay can send push notifications
+export const pushSlot = <span className="push-slot" />;
+// filled by session/chat.tsx once joined: the user's messages to the agent and STOP
+export const chatSlot = <div className="chat-slot" />;
 
 export function shell(children: Child[], tag: "main" | "div" = "main") {
   const answering = tag === "main" && location.pathname.startsWith("/a/");
@@ -12,7 +16,13 @@ export function shell(children: Child[], tag: "main" | "div" = "main") {
       <header className="topbar">
         {/* no home link on an answer page: one stray tap would lose a half-filled form */}
         {logo(answering ? undefined : "/")}
-        {answering && [<span className="sess">{sessionName}</span>, sessionTime, bellButton()]}
+        {answering && [
+          <span className="sess">{sessionName}</span>,
+          sessionTime,
+          sessionsLink(),
+          bellButton(),
+          pushSlot,
+        ]}
         <span className="e2e" title="End-to-end encrypted">
           {icon("lock")}
           <span>End-to-end encrypted</span>
@@ -54,6 +64,20 @@ try {
 } catch {}
 // a context made without a tap starts suspended; the first tap anywhere wakes it
 document.addEventListener("pointerdown", () => audio?.resume(), { once: true });
+
+// a new tab, so the open form here isn't lost
+const sessionsLink = () => (
+  <a
+    className="sessions-link"
+    href="/sessions"
+    target="_blank"
+    title="All sessions in this browser"
+    ariaLabel="All sessions in this browser (opens in a new tab)"
+    rel="noopener"
+  >
+    {icon("message")}
+  </a>
+);
 
 function bellButton() {
   const button = h("button", { type: "button", className: "bell", ariaLabel: "Beep on new questions" }, icon("bell"));
@@ -99,7 +123,8 @@ export function ping(mood?: Mood) {
   beep();
 }
 
-// The session as one feed, oldest first: the agent's updates (`ask say`), its forms, and what became of them.
+// The session as one feed, oldest first: the agent's updates (`ask say`), its forms, what became of them, and the
+// user's messages.
 // Whatever the page is doing now (waiting, an error) shows under it.
 const feed = <ol className="feed" ariaLabel="Session" />;
 const announcer = <p className="sr-only" ariaLive="polite" />;
@@ -110,9 +135,41 @@ export function addToFeed(item: HTMLElement) {
   while (feed.childElementCount > 100) feed.querySelector(":scope > li:not(.open)")!.remove();
 }
 
-export function say(text: string) {
-  addToFeed(<li className="say">{markdown(text)}</li>);
-  announcer.textContent = text;
+const bars = new Map<string, HTMLElement>();
+
+export function say({ say: text, progress }: Say) {
+  if (!progress) {
+    addToFeed(<li className="say">{markdown(text)}</li>);
+    announcer.textContent = text;
+    return;
+  }
+  const { done, total } = progress;
+  const complete = done === total;
+  const count = complete ? `${done}/${total}, complete` : `${done}/${total}`;
+  const bar = (
+    <li className={`say meter${complete ? " complete" : ""}`}>
+      {markdown(text)}
+      <div className="meter-row">
+        {h("progress", { max: total, value: done, ariaLabel: text })}
+        <span className="meter-count">
+          {complete && icon("check")}
+          {count}
+        </span>
+      </div>
+    </li>
+  );
+  const old = bars.get(text);
+  if (old?.isConnected) {
+    bar.classList.add("moved");
+    old.replaceWith(bar);
+  } else addToFeed(bar);
+  bars.set(text, bar);
+  announcer.textContent = `${text}: ${count}`;
+}
+
+// the user's own message: plain text, not markdown
+export function said(text: string) {
+  addToFeed(<li className="said">{text}</li>);
 }
 
 export const batchName = (question: Question) => question.title || question.questions[0].label;
@@ -143,7 +200,7 @@ export function statePanel(kind: Kind, title: string, detail?: string, ...extra:
 
 // After swapping screens, move focus to the new heading so keyboard and screen-reader users land on it.
 export function show(...children: Child[]) {
-  app.replaceChildren(shell([feed, announcer, children]));
+  app.replaceChildren(shell([feed, announcer, children, chatSlot]));
   const heading = app.querySelector<HTMLElement>(".shell-main > :not(.feed) h1");
   if (heading) {
     heading.tabIndex = -1;

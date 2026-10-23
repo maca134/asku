@@ -14,7 +14,7 @@ const call = (method: string, path: string, body?: unknown, key?: string) =>
     headers: { "content-type": "application/json", ...(key ? { authorization: `Bearer ${key}` } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-const env = (dir: "q" | "a", seq: number) => {
+const env = (dir: "q" | "a" | "m", seq: number) => {
   const { pt, ...e } = v.messages.find((m) => m.dir === dir)!;
   return { ...e, seq };
 };
@@ -215,6 +215,32 @@ test("browser-created session: roles swap, opening note is answer 0", async () =
   expect(await (await call("GET", `/s/${sid}/a?after=-1`)).json()).toEqual([env("a", 0)]);
   expect((await call("POST", `/s/${sid}/q`, env("q", 1), akey)).status).toBe(204);
   expect((await call("DELETE", `/s/${sid}`, undefined, akey)).status).toBe(204);
+});
+
+test("messages: the browser posts them in order, the agent reads them apart from answers", async () => {
+  const { sid, key } = await create();
+  const { key: bkey } = await (await call("POST", `/s/${sid}/bind`, { pub: v.pubB, mac: v.bind })).json();
+  await call("POST", `/s/${sid}/q`, env("q", 1), key);
+
+  expect((await call("POST", `/s/${sid}/m`, env("m", 1), key)).status).toBe(401); // only the browser writes
+  expect(await (await call("POST", `/s/${sid}/m`, env("m", 2), bkey)).json()).toEqual({ error: "bad seq" });
+  expect((await call("POST", `/s/${sid}/m`, { ...env("m", 1), dir: "a" }, bkey)).status).toBe(400);
+  expect(await (await call("GET", `/s/${sid}/m?after=0`)).json()).toEqual([]); // never held open
+
+  // an agent polling answers and messages wakes on a message
+  const poll = call("GET", `/s/${sid}/a?after=0&m=0`);
+  expect((await call("POST", `/s/${sid}/m`, env("m", 1), bkey)).status).toBe(204);
+  expect(await (await poll).json()).toEqual([env("m", 1)]);
+  expect(await (await call("POST", `/s/${sid}/m`, env("m", 1), bkey)).json()).toEqual({ error: "duplicate" });
+  expect((await call("POST", `/s/${sid}/m`, env("m", 2), bkey)).status).toBe(204);
+  expect(await (await call("GET", `/s/${sid}/m?after=1`)).json()).toEqual([env("m", 2)]);
+
+  // an old client polls answers only: it never sees a message
+  expect((await call("GET", `/s/${sid}/a?after=0`)).status).toBe(204);
+  await call("POST", `/s/${sid}/a`, env("a", 1), bkey);
+  expect(await (await call("GET", `/s/${sid}/a?after=0`)).json()).toEqual([env("a", 1)]);
+  expect(await (await call("GET", `/s/${sid}/a?after=0&m=1`)).json()).toEqual([env("a", 1), env("m", 2)]);
+  expect((await call("GET", `/s/${sid}/a?after=1&m=2`)).status).toBe(204);
 });
 
 test("agent-created session has no answer 0", async () => {

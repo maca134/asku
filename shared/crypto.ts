@@ -3,7 +3,7 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true });
 const subtle = crypto.subtle;
 
-export type Direction = "q" | "a";
+export type Direction = "q" | "a" | "m";
 export type Envelope = { v: 1; seq: number; dir: Direction; iv: string; ct: string; tag: string };
 export type Keys = { enc: CryptoKey; mac: CryptoKey };
 export type Bytes = Uint8Array<ArrayBuffer>;
