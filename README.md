@@ -94,10 +94,11 @@ Trust `ASKU_IP_HEADER` only when nothing but the proxy can reach the port, or an
 ### Deploy
 [`compose.yaml`](compose.yaml) runs the relay and `cloudflared` side by side with no published ports, so `cf-connecting-ip` can be trusted. The tunnel is remotely managed: its ingress (`asku.dev → http://relay:8080`) and the proxied `asku.dev` CNAME live in Cloudflare.
 ```
-# copy the repo to the host's stack dir, then:
+# copy compose.yaml to the host's stack dir, then:
 echo "TUNNEL_TOKEN=…" > .env    # cf tunnels token get <tunnel id>
-docker compose up -d --build    # also how to redeploy after copying new code
+docker compose up -d            # pulls ghcr.io/maca134/asku:latest; --build builds from a checkout instead
 ```
+Releases deploy themselves: publishing a GitHub Release runs the tests and pushes `ghcr.io/maca134/asku:<version>` and `:latest` ([release.yml](.github/workflows/release.yml)), and the stack's Watchtower pulls `:latest` within 5 minutes. Roll back with `image: ghcr.io/maca134/asku:<older version>`.
 asku.dev runs this as `/opt/stacks/asku` on prox-ovh2's `docker` LXC. The SQLite file is in the `asku_data` volume.
 POST bodies must be `application/json`. Writes take `Authorization: Bearer <key>`; reads only need the sid.
 
