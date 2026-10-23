@@ -1,4 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { LIMITS, relay } from "../src/relay";
 import v from "./vectors.json";
 
@@ -98,8 +100,7 @@ test("rate limits session creation per IP", async () => {
 });
 
 test("serves the page and hashed assets", async () => {
-  const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
-  const dist = mkdtempSync(`${require("node:os").tmpdir()}/asku-dist-`);
+  const dist = mkdtempSync(`${tmpdir()}/asku-dist-`);
   mkdirSync(`${dist}/assets`);
   writeFileSync(`${dist}/index.html`, "<!doctype html>");
   writeFileSync(`${dist}/assets/app-abc123.js`, "1");

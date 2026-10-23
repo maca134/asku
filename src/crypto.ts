@@ -22,6 +22,12 @@ function tagInput(sid: string, dir: Dir, seq: number, iv: Uint8Array, ct: Uint8A
   return out;
 }
 
+// Non-extractable private key; the public key as the raw 65-byte point.
+export async function newKeyPair() {
+  const kp = await subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]);
+  return { priv: kp.privateKey, pub: new Uint8Array(await subtle.exportKey("raw", kp.publicKey)) };
+}
+
 export async function deriveKeys(priv: CryptoKey, peerPub: Uint8Array): Promise<Keys> {
   const pub = await subtle.importKey("raw", peerPub, { name: "ECDH", namedCurve: "P-256" }, false, []);
   const k = await sha256(await subtle.deriveBits({ name: "ECDH", public: pub }, priv, 256));

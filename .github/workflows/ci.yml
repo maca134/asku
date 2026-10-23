@@ -16,8 +16,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - if: runner.os == 'macOS'
         run: echo "$(brew --prefix openssl@3)/bin" >> "$GITHUB_PATH"
-      - run: openssl version
-        shell: bash
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: bun test

@@ -30,7 +30,7 @@
         "type": { "enum": ["confirm", "single", "multi", "text", "number"] },
         "label": { "type": "string", "minLength": 1, "maxLength": 500 },
         "md": { "$ref": "#/$defs/markdown", "description": "Per-question markdown context." },
-        "required": { "type": "boolean", "default": false }
+        "required": { "type": "boolean" }
       },
       "allOf": [
         {
@@ -76,7 +76,7 @@
               "id": true, "type": true, "label": true, "md": true, "required": true,
               "default": { "type": "string" },
               "placeholder": { "type": "string", "maxLength": 200 },
-              "multiline": { "type": "boolean", "default": false },
+              "multiline": { "type": "boolean" },
               "maxLength": { "type": "integer", "minimum": 1 }
             },
             "additionalProperties": false
@@ -121,14 +121,13 @@
             "items": { "type": "string" }
           }
         },
-        "skipped": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true, "default": [] },
+        "skipped": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true },
         "comments": {
           "type": "object",
           "propertyNames": { "$ref": "#/$defs/id" },
-          "additionalProperties": { "type": "string", "maxLength": 10000 },
-          "default": {}
+          "additionalProperties": { "type": "string", "maxLength": 10000 }
         },
-        "note": { "type": "string", "maxLength": 10000, "default": "" },
+        "note": { "type": "string", "maxLength": 10000 },
         "error": { "type": "string", "maxLength": 2000, "description": "Set by the browser when it could not show the question, e.g. it failed schema validation." }
       }
     },
