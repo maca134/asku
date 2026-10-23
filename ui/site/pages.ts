@@ -78,6 +78,13 @@ export const PAGES: Record<string, Page> = {
     h1: "Start from the website",
     lead: "Already in a chat with your agent? Write it a message, get a link, and paste the link into the chat. The agent joins and asks you here.",
   },
+  "/sessions": {
+    nav: "Sessions",
+    title: "Your asku sessions",
+    description: "The asku sessions this browser holds. The list is read from this browser only, never the relay.",
+    h1: "Sessions in this browser",
+    lead: "Read from this browser's storage, so the relay learns nothing. Forget a session to delete its keys here.",
+  },
   "/terms": {
     nav: "Terms",
     title: "Terms · asku",

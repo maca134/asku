@@ -12,7 +12,7 @@ export function shell(children: Child[], tag: "main" | "div" = "main") {
       <header className="topbar">
         {/* no home link on an answer page: one stray tap would lose a half-filled form */}
         {logo(answering ? undefined : "/")}
-        {answering && [<span className="sess">{sessionName}</span>, sessionTime, bellButton()]}
+        {answering && [<span className="sess">{sessionName}</span>, sessionTime, sessionsLink(), bellButton()]}
         <span className="e2e" title="End-to-end encrypted">
           {icon("lock")}
           <span>End-to-end encrypted</span>
@@ -54,6 +54,20 @@ try {
 } catch {}
 // a context made without a tap starts suspended; the first tap anywhere wakes it
 document.addEventListener("pointerdown", () => audio?.resume(), { once: true });
+
+// a new tab, so the open form here isn't lost
+const sessionsLink = () => (
+  <a
+    className="sessions-link"
+    href="/sessions"
+    target="_blank"
+    title="All sessions in this browser"
+    ariaLabel="All sessions in this browser (opens in a new tab)"
+    rel="noopener"
+  >
+    {icon("message")}
+  </a>
+);
 
 function bellButton() {
   const button = h("button", { type: "button", className: "bell", ariaLabel: "Beep on new questions" }, icon("bell"));

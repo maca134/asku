@@ -20,7 +20,7 @@ import {
 } from "../page";
 import type { Answer, Question, Say } from "../types";
 import { type Session, sendAnswer } from "./send";
-import { drop, rename, save } from "./storage";
+import { drop, received, rename, save } from "./storage";
 
 export function listen(session: Session) {
   const { sid, keys, state } = session;
@@ -78,11 +78,12 @@ export function listen(session: Session) {
     // no name yet: the first title will do
     if (valid && (message.name || (!sessionName.textContent && message.title)))
       nameSession(message.name ?? message.title!);
-    if (valid && rename(state, message.name)) save(sid, state);
+    if (valid && rename(state, message.name ?? (state.name ? undefined : message.title))) save(sid, state);
     if (state.answered.includes(seq)) {
       if (valid) addToFeed(feedEvent("check", `Answered: ${batchName(message)}`));
       return;
     }
+    if (received(state, seq)) save(sid, state);
     if (current?.sending) {
       deferred.push([seq, message]);
       return;

@@ -3,6 +3,7 @@ import { codeSpans, h, icon } from "../dom";
 import { field } from "../form/fields";
 import { MOODS, moodLine } from "../form/form";
 import { copyable, installLine, statePanel } from "../page";
+import { sessionList } from "../session/sessions";
 import { startCard } from "../session/start";
 import type { Item, Mood } from "../types";
 import { countdown, demo, showcase } from "./demo";
@@ -413,6 +414,15 @@ export const start = () => (
     <div className="wrap narrow">
       {pageHead("Start here", "/start")}
       {startCard()}
+    </div>
+  </section>
+);
+
+export const sessions = () => (
+  <section className="sec">
+    <div className="wrap narrow">
+      {pageHead("Your sessions", "/sessions")}
+      {sessionList()}
     </div>
   </section>
 );
