@@ -1,0 +1,6 @@
+node_modules
+dist
+web/gen
+.git
+.env
+*.db*

@@ -88,7 +88,16 @@ ask.sh close
 
 ## Relay API
 [`src/relay.ts`](src/relay.ts). `bun src/relay.ts` (env: `PORT`, `ASKU_DB`, `ASKU_HOST`, `ASKU_IP_HEADER`).
-Behind a Cloudflare Tunnel: `ASKU_HOST=127.0.0.1 ASKU_IP_HEADER=cf-connecting-ip`. Bind to localhost, or anyone reaching the port directly can forge the header and dodge the rate limit.
+Trust `ASKU_IP_HEADER` only when nothing but the proxy can reach the port, or anyone can forge it and dodge the rate limit.
+
+### Deploy
+[`compose.yaml`](compose.yaml) runs the relay and `cloudflared` side by side with no published ports, so `cf-connecting-ip` can be trusted. The tunnel is remotely managed: its ingress (`asku.dev → http://relay:8080`) and the proxied `asku.dev` CNAME live in Cloudflare.
+```
+# copy the repo to the host's stack dir, then:
+echo "TUNNEL_TOKEN=…" > .env    # cf tunnels token get <tunnel id>
+docker compose up -d --build    # also how to redeploy after copying new code
+```
+asku.dev runs this as `/opt/stacks/asku` on prox-ovh2's `docker` LXC. The SQLite file is in the `asku_data` volume.
 POST bodies must be `application/json`. Writes take `Authorization: Bearer <key>`; reads only need the sid.
 
 "Creator" and "joiner" are the agent and browser in the usual flow, swapped in the reverse flow.
