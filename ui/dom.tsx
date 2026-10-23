@@ -34,6 +34,7 @@ const ICONS: Record<string, string> = {
   minus: '<path d="M5.5 12h13"/>',
   play: '<path d="M8 5.5v13l10.5-6.5z"/>',
   pause: '<path d="M9 5.5v13M15 5.5v13"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
   shield: '<path d="M12 3l7.5 3v5.5c0 4.5-3.2 8.2-7.5 9.5-4.3-1.3-7.5-5-7.5-9.5V6z"/><path d="M9 12l2 2 4-4"/>',
   json: '<path d="M8.5 4.5H7.5a2 2 0 0 0-2 2v3a2.5 2.5 0 0 1-2 2.5 2.5 2.5 0 0 1 2 2.5v3a2 2 0 0 0 2 2h1M15.5 4.5h1a2 2 0 0 1 2 2v3a2.5 2.5 0 0 0 2 2.5 2.5 2.5 0 0 0-2 2.5v3a2 2 0 0 1-2 2h-1"/>',
   file: '<path d="M14 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5z"/><path d="M14 3.5v5h5M9 13h6M9 16.5h4"/>',

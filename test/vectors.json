@@ -21,9 +21,9 @@
       "seq": 1,
       "dir": "q",
       "iv": "haB6G7cgivOwoBHj90IIJQ==",
-      "ct": "oMgXJzqgwiVHqqkTCd5O3CUEGQzNcza6+xu2aNFMKOOCupMOG3+O44AemogOvmOQ0kq28jqe9tGjpbM2sgeTyYt1PUNymNMfu5eKkxtNEdck66jcjkKtsXISqZWlAC7pUTw8nkXPZ6tGKPQcNsruSsLkWqXOt0TyeLeI4jxMrdUcwU0ohyrKb7WQaHy9gACuog3LQb/XVw72V7yvyvIYq3i3DP+H14r/YOs1vWcx+G/SqXuGe7xQ3Ru90XXK/mu+HwuG/pLR+78jn///6Bb/aWhr6fMeGi0dc4pOPS2OOicOqmU3Ji66T64TVigNITH1h1Hftr/sccnBDxOFvb9TpnzdBRo9BPnTsV29BgPb/qnKnrGmmgIHeB04VpLlnhUkfWB2bBSG3t4FT29i/3rT+N1YvQoggRyGOxjm/osMW7oRZtZisQ14xhVfEpKzswcpxrL105q4lOkRD9gh343CMEseUhMsVKQWOoJHwSZTP6Qyyq2unl1EgWd9/bdUrv6x9adccuuCn4ysvry/3+pgVN8lJAXX7MODKwZjs5lfUQefcKH4QZwbIEAK9k53aLd7wMGiVtEJwScsZX3HohR1pffCrBcha93HDYX6CDvh4sBp3IAw0Ahs4IaufqMXVkWES4N8lMf0ALDjTgZPBFNY/EX7yoeW1s7ZUQ5ShMFrng1M7OjQNHmSV6I46Yq/5FLYcRjPxjJGZhUV6yXuruOBFdwuihT/SCAqpLapAU1N4k7NgEjUzib2iC1YnxWx5faK",
-      "tag": "bmRpD8IABl0wjROb2neKSykul0ZsR24BRVfKXgKy9z0=",
-      "pt": "{\"title\":\"Deploy plan\",\"md\":\"About to deploy **v2.3** to production.\",\"questions\":[{\"id\":\"go\",\"type\":\"confirm\",\"label\":\"Deploy now?\",\"required\":true},{\"id\":\"env\",\"type\":\"single\",\"label\":\"Target\",\"options\":[\"staging\",{\"value\":\"prod\",\"label\":\"Production\",\"md\":\"Live traffic\"}],\"default\":\"staging\"},{\"id\":\"checks\",\"type\":\"multi\",\"label\":\"Run checks\",\"options\":[\"lint\",\"test\",\"e2e\"],\"min\":1},{\"id\":\"why\",\"type\":\"text\",\"label\":\"Release notes\",\"multiline\":true,\"placeholder\":\"Optional\"},{\"id\":\"pct\",\"type\":\"number\",\"label\":\"Canary %\",\"min\":0,\"max\":100,\"step\":5,\"default\":10}]}"
+      "ct": "oMgXJzqgwiVHqqkTCd5O3CUEGQzNcza6+xu2aNFMKOOCupMOG3+O44AemogOvmOQ0kq28jqe9tGjpbM2sgeTyYt1PUNymNMfu5eKkxtNEdck66jcjkKtsXISqZWlAC7pUTw8nkXPZ6tGKPQcNsruSsLkWqXOt0TyeLeI4jxMrdUcwU0ohyrKb7WQaHy9gACuog3LQb/XVw72V7yvyvIYq3i3DP+H14r/YOs1vWcx+G/SqXuGe7xQ3Ru90XXK/mu+HwuG/pLR+78jn///6Bb/aWhr6fMeGi0dc4pOPS2OOicOqmU3Ji66T64TVigNITH1h1Hftr/sccnBDxOFvb9TpnzdBRo9BPnTsV29BgPb/qnKnrGmmgIHeB04VpLlnhUkfWB2bBSG3t4FT29i/3rT+N1YvQoggRyGOxjm/osMW7oRZtZisQ14xhVfEpKzswcpxrL105q4lOkRD9gh343CMEseUhMsVKQWOoJHwSZTP6Qyyq2unl1EgWd9/bdUrv6x39MmY07VvU82F9zuCfQaffhaA2kFgAX/PB236mrjRODO7neVjQaMHzLk7D+Sl7uV4seyeDHFVMppUGNED1tXNVUA8To+DN4oQw+NsFGUNC9y6Sn8ikJBrjHz6K0QdAyue8knJnrrGZeEKbKZ3T/tVJ5hfahwQVisXPDHAy7f3zS1HxseVjMx5UDjQ1q1xQ76GiJIN1mwy+NnfefwgasHEU3hM10NKigdvILt0ZYGSeKJg9U85R0s2lr6378Lyf0IvGHSytqgQBYu5hBMkX0391yJkVXiNQs8HunkBBN09M0YEToeHKBe9pJN++37/Bb8/lUXq03sk+3D6CNBKLLO5r/oDeKfZcED6LGOwLbZNLfvgz9MeMEtH379c7QJBs1mf7fwnT45GxR8cwhN0QCYgNWQVkKYxds9pvwWQDQYg3JraB7aax7wli1mifmx3n7q47y0AxxY9/2b21WKMnymGz06EGzy6R4Tzf5S0N41MXKZU4KUh2SI5+WPjShZqyGXk1H26WOxL/et4CiSMjmZZC+ZT+x+PT4KZI4r9KQC44xGEn9uZ4xlUFJOMMF6iceB22/NY8GqHdmCHxpF7kzXdYOxXeLGtPxqVkxW7zBFaRCCD0gVEJb9dcoxB2nDRoesGRxETVBDyPbBOZweYgI3KoVS2v6NIiRrqcYqEZ4LyNE=",
+      "tag": "B3v+IKJk3/G3QIMmyxavKcU/TsN/Uja53Me1wyoqvus=",
+      "pt": "{\"title\":\"Deploy plan\",\"md\":\"About to deploy **v2.3** to production.\",\"questions\":[{\"id\":\"go\",\"type\":\"confirm\",\"label\":\"Deploy now?\",\"required\":true},{\"id\":\"env\",\"type\":\"single\",\"label\":\"Target\",\"options\":[\"staging\",{\"value\":\"prod\",\"label\":\"Production\",\"md\":\"Live traffic\"}],\"default\":\"staging\"},{\"id\":\"checks\",\"type\":\"multi\",\"label\":\"Run checks\",\"options\":[\"lint\",\"test\",\"e2e\"],\"min\":1,\"other\":true},{\"id\":\"steps\",\"type\":\"review\",\"label\":\"Migration steps\",\"options\":[\"drop old index\",{\"value\":\"backfill\",\"md\":\"About 20 min\"},\"add column\"]},{\"id\":\"order\",\"type\":\"rank\",\"label\":\"Ship order\",\"options\":[\"api\",\"web\",\"mobile\"]},{\"id\":\"why\",\"type\":\"text\",\"label\":\"Release notes\",\"multiline\":true,\"placeholder\":\"Optional\"},{\"id\":\"pct\",\"type\":\"number\",\"label\":\"Canary %\",\"min\":0,\"max\":100,\"step\":5,\"default\":10},{\"id\":\"when\",\"type\":\"date\",\"label\":\"Deploy window\",\"time\":true,\"min\":\"2026-10-24T09:00\"}]}"
     },
     {
       "v": 1,
@@ -51,6 +51,15 @@
       "ct": "QJhrKvl9oK+G1DoQoaL16Q==",
       "tag": "I8O1tIsRWyEyAEGIAO1/DZpNbru1AyoYp3lgW8v1kac=",
       "pt": "x"
+    },
+    {
+      "v": 1,
+      "seq": 1,
+      "dir": "m",
+      "iv": "5d0PcKQfo2MSk+AH7A5iKg==",
+      "ct": "jh364stgYFgGF+5xdMWBHp4uyjyj6IwsAk4+4mIyAHJBzKg3uh+X08LCOJTp7Z/Z",
+      "tag": "Fqg8er8fU4LEMhZmG0yGZ019ltjJNfpqqM4lZdEgYD0=",
+      "pt": "{\"message\":\"use staging — 日本語\"}"
     }
   ]
 }

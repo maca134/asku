@@ -1,7 +1,7 @@
 // The relay's SQLite tables: one row per session, one per stored envelope. Envelopes are opaque ciphertext.
 import { Database } from "bun:sqlite";
 
-export type Direction = "q" | "a";
+export type Direction = "q" | "a" | "m";
 export type Role = "agent" | "browser";
 
 // role and creatorPub: the side that made the session. joinerPub and bindTag: the side that joined it.

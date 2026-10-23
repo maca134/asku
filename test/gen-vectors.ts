@@ -20,11 +20,12 @@ const K = sha(Z);
 const kEnc = hmac(K, "enc");
 const kMac = hmac(K, "mac");
 
-const plaintexts: ["q" | "a", number, string][] = [
+const plaintexts: ["q" | "a" | "m", number, string][] = [
   ["q", 1, JSON.stringify(question)],
   ["a", 1, JSON.stringify({ answers: { go: true }, skipped: [], comments: {}, note: "héllo — 日本語 🚀" })],
   ["q", 2, "0123456789abcdef0123456789abcdef"], // exact block multiple: full padding block
   ["a", 2, "x"],
+  ["m", 1, JSON.stringify({ message: "use staging — 日本語" })],
 ];
 
 const messages = plaintexts.map(([dir, seq, pt], i) => {

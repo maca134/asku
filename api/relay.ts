@@ -32,6 +32,8 @@ const randomId = (bytes: number) =>
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 const fail = (status: number, error: string) => json({ error }, status);
 const empty = (status = 204) => new Response(null, { status });
+const envelopes = (rows: { envelope: string }[]) =>
+  new Response(`[${rows.map((row) => row.envelope).join(",")}]`, { headers: { "content-type": "application/json" } });
 
 function decodeBase64(value: unknown, length?: number) {
   if (typeof value !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return null;
@@ -264,9 +266,9 @@ export function relay({
     return json({ key }, 201);
   }
 
-  // q: the next question in order. a: answers a stored question; seq 0 is the opening note of a browser-made session.
+  // q, m: the next in order. a: answers a stored question; seq 0 is the opening note of a browser-made session.
   function inOrder(session: Session, direction: Direction, seq: number) {
-    if (direction === "q") return seq === (sql.lastSeq.get(session.sid, "q")?.seq ?? 0) + 1;
+    if (direction !== "a") return seq === (sql.lastSeq.get(session.sid, direction)?.seq ?? 0) + 1;
     if (seq === 0) return session.role === "browser";
     return sql.has.get(session.sid, "q", seq) !== null;
   }
@@ -349,21 +351,24 @@ export function relay({
           if (!current) return fail(404, "no such session");
           if (current.joinerPub) return json({ pub: current.joinerPub, mac: current.bindTag });
         });
-      case "GET a":
+      case "GET a": {
+        // ?m=n: also the user's messages after n. Clients that don't ask for them never see one.
+        const since = url.searchParams.has("m") ? Number(url.searchParams.get("m")) || 0 : null;
         sql.touch.run(Date.now(), sid);
         return longPoll(sid, () => {
           if (!sql.session.get(sid)) return fail(404, "no such session");
-          const answers = sql.after.all(sid, "a", after);
-          if (answers.length)
-            return new Response(`[${answers.map((answer) => answer.envelope).join(",")}]`, {
-              headers: { "content-type": "application/json" },
-            });
+          const found = [...sql.after.all(sid, "a", after), ...(since === null ? [] : sql.after.all(sid, "m", since))];
+          if (found.length) return envelopes(found);
         });
+      }
+      case "GET m":
+        return envelopes(sql.after.all(sid, "m", after));
       case "GET q":
         sql.touch.run(Date.now(), sid);
         return questionFeed(req, server, sid, Number(req.headers.get("last-event-id") ?? after) || 0);
       case "POST q":
       case "POST a":
+      case "POST m":
         return post(req, session, action as Direction);
     }
     return fail(405, "method not allowed");

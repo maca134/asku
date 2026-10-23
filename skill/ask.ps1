@@ -1,7 +1,7 @@
 # asku agent client. PowerShell 5.1 + .NET Framework only. Keep this file ASCII: PS 5.1 reads BOM-less files as ANSI.
 param([string]$Command, [string]$File)
 $ErrorActionPreference = 'Stop'
-$Version = '1.3.0' # keep in step with ask.sh
+$Version = '1.4.0' # keep in step with ask.sh
 
 function ConvertTo-AskuHex([byte[]]$Bytes) { [BitConverter]::ToString($Bytes).Replace('-', '').ToLower() }
 
@@ -102,7 +102,9 @@ if ($Command -ne 'close' -and (Test-Path (Join-Path $S 'sid')) -and -not (Test-P
 }
 
 function Fail([string]$Msg) { [Console]::Error.WriteLine("asku: $Msg"); exit 1 }
-function Pending([string]$Msg) { [Console]::Out.Write("PENDING`n$Msg`nRun again to keep waiting: $Self wait`n"); exit 2 }
+$Stop = $false # once the user pressed STOP, every exit is 3
+function Exit-Asku([int]$Code) { exit $(if ($script:Stop) { 3 } else { $Code }) }
+function Pending([string]$Msg) { [Console]::Out.Write("PENDING`n$Msg`nRun again to keep waiting: $Self wait`n"); Exit-Asku 2 }
 function Get-State([string]$Name, $Default = $null) { $p = Join-Path $S $Name; if (Test-Path $p) { [IO.File]::ReadAllText($p).Trim() } else { $Default } }
 function Set-State([string]$Name, $Value) { [IO.File]::WriteAllText((Join-Path $S $Name), "$Value") }
 function Remove-Session { if (Test-Path $S) { Remove-Item -Recurse -Force $S } }
@@ -221,7 +223,7 @@ function Exit-AskuTimeout([int[]]$Seqs) {
     [Console]::Out.Write('{"seqs":[' + ($Seqs -join ',') + '],"answers":{},"skipped":[' + $skipped + '],"comments":{},"note":"","timeout":true}' + "`n")
     $left = (Get-Batches 'o').Count
     if ($left) { [Console]::Error.WriteLine("asku: $left batch(es) still pending; run: $Self wait") }
-    exit 0
+    Exit-Asku 0
 }
 function Test-AskuExpired([string[]]$Kinds) { $x = @(Get-AskuExpired $Kinds); if ($x.Count) { Exit-AskuTimeout $x } }
 
@@ -306,6 +308,26 @@ function Send-Asku([switch]$NoWait) {
     @{ Keys = $keys; Sid = $sid; Deadline = $deadline }
 }
 
+# Prints the user's messages (dir m) among the envelopes, in order, each once. Returns how many; sets Stop on a stop.
+function Show-AskuMessages($Keys, [string]$Sid, $Envelopes) {
+    $shown = 0
+    foreach ($e in @($Envelopes | Where-Object { $_.dir -eq 'm' })) {
+        $seq = [int](Get-State 'm' 0) + 1
+        try { $text = [Text.Encoding]::UTF8.GetString((Unprotect-AskuMessage $Keys $Sid 'm' $seq $e)) } catch { Fail 'a message failed verification' }
+        [Console]::Out.Write($text + "`n")
+        Set-State 'm' $seq
+        if ($text.StartsWith('{"stop":true')) { $script:Stop = $true }
+        $shown++
+    }
+    $shown
+}
+
+# Prints messages that came in since the last call, without waiting for any.
+function Show-AskuInbox($c) {
+    $r = Invoke-AskuRequest GET "/s/$($c.Sid)/m?after=$(Get-State 'm' 0)"
+    if ($r -and $r.Code -eq 200) { $null = Show-AskuMessages $c.Keys $c.Sid @($r.Body | ConvertFrom-Json | ForEach-Object { $_ }) }
+}
+
 # Waits for the next answer to an open batch and prints it. One answer can cover several batches (its seqs).
 function Wait-Asku {
     Test-AskuExpired 'q'
@@ -315,12 +337,14 @@ function Wait-Asku {
     $after = @(Get-Batches 'o')[0] - 1
     while ($true) {
         if ((Get-Date) -ge $c.Deadline) { Pending "The user has not answered yet.$(if (Get-State 'T') { " If they lost the page, their link is: $(Get-Link)" })" }
-        $r = Invoke-AskuRequest GET "/s/$($c.Sid)/a?after=$after"
+        $r = Invoke-AskuRequest GET "/s/$($c.Sid)/a?after=$after&m=$(Get-State 'm' 0)"
         if (-not $r) { Start-Sleep 2; continue }
         switch ($r.Code) {
             200 {
                 $all = @($r.Body | ConvertFrom-Json | ForEach-Object { $_ }) # PS 5.1 emits a JSON array as one object
-                $env = $all | Where-Object { Test-Path (Join-Path $S "o$($_.seq).json") } | Select-Object -First 1
+                $shown = Show-AskuMessages $c.Keys $c.Sid $all
+                $env = $all | Where-Object { $_.dir -eq 'a' -and (Test-Path (Join-Path $S "o$($_.seq).json")) } | Select-Object -First 1
+                if (-not $env -and $shown) { Pending 'The user has not answered yet.' }
                 if (-not $env) { Test-AskuExpired 'o'; Start-Sleep 2; break } # all already handled; keep the cursor, a lower seq can still arrive
                 $seq = [int]$env.seq
                 try { $text = [Text.Encoding]::UTF8.GetString((Unprotect-AskuMessage $c.Keys $c.Sid 'a' $seq $env)) } catch { Fail 'answer failed verification' }
@@ -331,7 +355,7 @@ function Wait-Asku {
                 [Console]::Out.Write($text + "`n")
                 $left = (Get-Batches 'o').Count
                 if ($left) { [Console]::Error.WriteLine("asku: $left batch(es) still pending; run: $Self wait") }
-                exit 0
+                Exit-Asku 0
             }
             204 { Test-AskuExpired 'o' } # checked after a poll, so an answer that beat the deadline wins
             404 { Exit-Gone }
@@ -348,7 +372,8 @@ usage: $Self ask <questions.json>   send a question, print the answer JSON
        $Self wait                   keep waiting after PENDING
        $Self close                  end the session
        $Self version                print the client version
-exit: 0 answered, 1 error, 2 PENDING (run wait)
+the user's messages print first, one JSON line each: {"message":"..."} or {"stop":true}
+exit: 0 answered, 1 error, 2 PENDING (run wait), 3 the user pressed STOP
 env: ASKU_URL ASKU_SESSION ASKU_HOME ASKU_WAIT
 "@
 
@@ -360,14 +385,19 @@ switch ($Command) {
     }
     'add' {
         Add-AskuBatch $File
-        if (-not (Send-Asku -NoWait)) { Pending "Queued. The user has not opened the link yet. Give them: $(Get-Link)" }
+        $c = Send-Asku -NoWait
+        if (-not $c) { Pending "Queued. The user has not opened the link yet. Give them: $(Get-Link)" }
+        Show-AskuInbox $c
         Pending 'Sent. Add more with add, or run wait for the answer.'
     }
     'join' { Join-AskuSession $File; Wait-Asku }
     'say' {
         Add-AskuSay $File
-        if (-not (Send-Asku -NoWait)) { [Console]::Out.Write("Queued: it shows once the user opens the link.`n"); exit 0 }
+        $c = Send-Asku -NoWait
+        if (-not $c) { [Console]::Out.Write("Queued: it shows once the user opens the link.`n"); exit 0 }
+        Show-AskuInbox $c
         [Console]::Out.Write("Said.`n")
+        Exit-Asku 0
     }
     'wait' { Wait-Asku }
     'version' { [Console]::Out.Write("$Version`n") }

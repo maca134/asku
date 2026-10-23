@@ -67,15 +67,20 @@ async function build() {
   ajv.addSchema(schema);
   await Bun.write(
     "ui/gen/validate.js",
-    standalone(ajv, { question: `${schema.$id}#/$defs/question`, say: `${schema.$id}#/$defs/say` }),
+    standalone(ajv, {
+      question: `${schema.$id}#/$defs/question`,
+      say: `${schema.$id}#/$defs/say`,
+      message: `${schema.$id}#/$defs/message`,
+    }),
   );
   await Bun.write(
     "ui/gen/validate.d.ts",
     `import type { ErrorObject } from "ajv";
-import type { Question, Say } from "../types";
+import type { Message, Question, Say } from "../types";
 type Validator<T> = ((data: unknown) => data is T) & { errors?: ErrorObject[] | null };
 export const question: Validator<Question>;
 export const say: Validator<Say>;
+export const message: Validator<Message>;
 `,
   );
 
