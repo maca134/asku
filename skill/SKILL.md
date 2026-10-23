@@ -1,6 +1,7 @@
 ---
 name: asku
 description: Ask the user questions through an end-to-end encrypted form they answer on any device. Use when you need the user's input and they may be away from the terminal, or when they paste an asku.dev/j/ link.
+argument-hint: "[<asku.dev/j/ link> | <what to ask>]"
 ---
 
 # asku
