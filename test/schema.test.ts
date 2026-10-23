@@ -36,6 +36,18 @@ test("other: a write-in on single and multi only", () => {
   expect(valid("question", q({ type: "number", other: true }))).toBe(false);
 });
 
+test("review: approve or reject each option, answered as a map", () => {
+  expect(valid("question", q({ type: "review", options: ["a", { value: "b", md: "*why*" }], required: true }))).toBe(
+    true,
+  );
+  expect(valid("question", q({ type: "review" }))).toBe(false); // options required
+  expect(valid("question", q({ type: "review", options: [] }))).toBe(false);
+  expect(valid("question", q({ type: "review", options: ["a"], default: { a: true } }))).toBe(false);
+  expect(valid("question", q({ type: "review", options: ["a"], other: true }))).toBe(false);
+  expect(valid("answer", { answers: { x: { a: true, b: false } }, skipped: [] })).toBe(true);
+  expect(valid("answer", { answers: { x: { a: "yes" } } })).toBe(false);
+});
+
 test("deadline, mood, say and delegated", () => {
   expect(
     valid("question", {

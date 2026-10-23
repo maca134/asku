@@ -1,5 +1,11 @@
 {
-  "answers": { "go": true, "env": "prod", "checks": ["lint", "test"], "pct": 25 },
+  "answers": {
+    "go": true,
+    "env": "prod",
+    "checks": ["lint", "test"],
+    "steps": { "drop old index": false, "backfill": true },
+    "pct": 25
+  },
   "skipped": ["why"],
   "comments": { "pct": "Keep it low on Fridays" },
   "note": ""
