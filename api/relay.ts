@@ -310,8 +310,8 @@ export function relay({
   function pushQuestion({ sid, push }: Session) {
     if (!vapid || !push) return;
     sendPush(vapid, JSON.parse(push), JSON.stringify({ sid }))
-      .then((res) => {
-        if (res.status === 404 || res.status === 410) sql.setPush.run(null, sid); // the browser unsubscribed
+      .then((status) => {
+        if (status === 404 || status === 410) sql.setPush.run(null, sid); // the browser unsubscribed
       })
       .catch(console.error);
   }

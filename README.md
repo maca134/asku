@@ -150,7 +150,7 @@ Errors are `{error}` with `400 401 404 405 409 413 429`. The relay stores only s
 
 #### Push notifications
 The answer page's phone button asks for a notification on that device when the agent posts to that session; nothing is asked until it's tapped, and a second tap turns it off. The site installs as an app (`/manifest.webmanifest`, service worker `/sw.js`). Works in Chrome on Android and desktop browsers; on iOS (16.4+) only after "Add to Home Screen", with the session opened from the installed app.
-- The push ([`api/push.ts`](api/push.ts), RFC 8291 + VAPID) carries only `{sid}`. The service worker looks up the session's name in IndexedDB and shows "New questions in <name>", unless that session's page is open and visible.
+- The push ([`api/push.ts`](api/push.ts), sent with [`web-push`](https://github.com/web-push-libs/web-push)) carries only `{sid}`. The service worker looks up the session's name in IndexedDB and shows "New questions in <name>", unless that session's page is open and visible.
 - `GET /s/:sid` adds `push` (the VAPID public key) when push is on. Endpoints must be a known push service (FCM, Mozilla, Windows, Apple). The subscription is stored with the session and goes when it's closed or expires, or when the push service says it's gone.
 - Off unless `ASKU_VAPID_PUBLIC`, `ASKU_VAPID_PRIVATE` and `ASKU_VAPID_SUBJECT` (`mailto:` or `https:` contact) are all set. `bun api/push.ts` prints a new key pair.
 

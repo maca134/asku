@@ -61,7 +61,8 @@ above all where keys and plaintext are handled.
 - Validate at every trust boundary: request bodies in the relay, decrypted messages against `schema.json` in the
   browser. Never trust a field of an envelope for `dir` or `seq`.
 - Don't weaken the CSP, SRI or other headers in `api/relay.ts`.
-- The relay has no runtime dependencies. Add a browser dependency only when the platform can't do it.
+- The relay's one runtime dependency is `web-push`, pinned: Web Push crypto isn't worth owning. Add no others.
+  Add a browser dependency only when the platform can't do it.
 
 ## Tooling
 

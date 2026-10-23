@@ -1,4 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
+import https from "node:https";
 import { relay } from "../api/relay";
 import v from "./vectors.json";
 
@@ -42,6 +43,13 @@ const base64url = (bytes: Uint8Array) => bytes.toBase64({ alphabet: "base64url",
 const fromBase64url = (text: string) => Uint8Array.fromBase64(text, { alphabet: "base64url" });
 const encode = (text: string) => new TextEncoder().encode(text);
 
+// web-push only speaks https, so the fake push service has a self-signed localhost certificate the relay trusts.
+const tls = {
+  cert: Bun.file(`${import.meta.dir}/push-service.crt`),
+  key: Bun.file(`${import.meta.dir}/push-service.key`),
+};
+https.globalAgent.options.ca = await tls.cert.text();
+
 // A browser's side of a push subscription, and a push service that hands each delivery to the test.
 async function pushService(status = 201) {
   const receiver = (await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, false, [
@@ -53,6 +61,7 @@ async function pushService(status = 201) {
   const waiting: ((req: Request) => void)[] = [];
   const server = Bun.serve({
     port: 0,
+    tls,
     async fetch(req) {
       const copy = new Request(req.url, { method: req.method, headers: req.headers, body: await req.arrayBuffer() });
       const next = waiting.shift();
@@ -107,7 +116,7 @@ async function vapidKeys() {
   return { vapid: { publicKey, privateKey, subject: "mailto:ops@example.com" }, verifier: pair.publicKey };
 }
 
-const local = /^http:\/\/localhost:\d+\//;
+const local = /^https:\/\/localhost:\d+\//;
 
 test("a new question pushes only the sid, signed with the relay's VAPID key", async () => {
   const { vapid, verifier } = await vapidKeys();
