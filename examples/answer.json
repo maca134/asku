@@ -5,7 +5,8 @@
     "checks": ["lint", "test"],
     "steps": { "drop old index": false, "backfill": true },
     "order": ["web", "api", "mobile"],
-    "pct": 25
+    "pct": 25,
+    "when": "2026-10-24T14:30+07:00"
   },
   "skipped": ["why"],
   "comments": { "pct": "Keep it low on Fridays" },

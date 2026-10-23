@@ -22,7 +22,8 @@ export type TextItem = Base & {
   maxLength?: number;
 };
 export type NumberItem = Base & { type: "number"; default?: number; min?: number; max?: number; step?: number };
-export type Item = ConfirmItem | SingleItem | MultiItem | ReviewItem | RankItem | TextItem | NumberItem;
+export type DateItem = Base & { type: "date"; time?: boolean; default?: string; min?: string; max?: string };
+export type Item = ConfirmItem | SingleItem | MultiItem | ReviewItem | RankItem | TextItem | NumberItem | DateItem;
 
 export type Mood = "confident" | "excited" | "nervous" | "begging" | "grumpy" | "sheepish";
 

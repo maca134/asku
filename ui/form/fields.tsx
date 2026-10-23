@@ -2,6 +2,7 @@
 import { type Child, capitalise, h, icon, markdown } from "../dom";
 import type {
   ConfirmItem,
+  DateItem,
   Item,
   MultiItem,
   NumberItem,
@@ -11,6 +12,7 @@ import type {
   SingleItem,
   TextItem,
 } from "../types";
+import { withOffset } from "./date";
 
 type Control = { elements: Child[]; value: () => unknown; check?: () => string | null };
 
@@ -248,7 +250,7 @@ function textControl(item: TextItem): Control {
   return { elements: [input], value: () => (input.value.trim() ? input.value : undefined) };
 }
 
-function bounds(min?: number, max?: number) {
+function bounds(min?: number | string, max?: number | string) {
   if (min !== undefined && max !== undefined) return `${min} to ${max}`;
   if (min !== undefined) return `at least ${min}`;
   if (max !== undefined) return `at most ${max}`;
@@ -300,6 +302,24 @@ function numberControl(item: NumberItem): Control {
   };
 }
 
+// The native picker. With time, the answer carries the phone's UTC offset on the picked day.
+function dateControl(item: DateItem): Control {
+  const { min, max, time } = item;
+  const input = h("input", {
+    type: time ? "datetime-local" : "date",
+    className: "input",
+    ariaLabel: item.label,
+    value: item.default ?? "",
+  });
+  if (min) input.min = min;
+  if (max) input.max = max;
+  return {
+    elements: [input, hint(bounds(min?.replace("T", " "), max?.replace("T", " ")))],
+    value: () => (input.value ? (time ? withOffset(input.value) : input.value) : undefined),
+    check: () => (input.validity.valid ? null : input.validationMessage || "not a valid date"),
+  };
+}
+
 function control(item: Item, name: string) {
   switch (item.type) {
     case "confirm":
@@ -315,6 +335,8 @@ function control(item: Item, name: string) {
       return textControl(item);
     case "number":
       return numberControl(item);
+    case "date":
+      return dateControl(item);
   }
 }
 

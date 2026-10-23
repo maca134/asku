@@ -60,6 +60,22 @@ test("rank: order the options, answered as the full list", () => {
   expect(valid("answer", { answers: { x: ["b", "a"] }, skipped: [] })).toBe(true);
 });
 
+test("date: a day, or a day and time with time: true", () => {
+  const day = { type: "date", default: "2026-10-24", min: "2026-10-01", max: "2026-12-31" };
+  expect(valid("question", q({ ...day, required: true }))).toBe(true);
+  expect(valid("question", q({ type: "date", time: true, default: "2026-10-24T09:30", min: "2026-10-24T08:00" }))).toBe(
+    true,
+  );
+  expect(valid("question", q({ type: "date", default: "2026-10-24T09:30" }))).toBe(false); // a time needs time: true
+  expect(valid("question", q({ type: "date", time: true, default: "2026-10-24" }))).toBe(false);
+  expect(valid("question", q({ type: "date", time: true, min: "2026-10-24T09:30+07:00" }))).toBe(false); // no offset
+  expect(valid("question", q({ type: "date", max: "24/10/2026" }))).toBe(false);
+  expect(valid("question", q({ type: "date", time: "only" }))).toBe(false); // no time-only mode
+  expect(valid("question", q({ type: "time" }))).toBe(false);
+  expect(valid("question", q({ type: "date", options: ["a"] }))).toBe(false);
+  expect(valid("answer", { answers: { x: "2026-10-24T09:30+07:00" }, skipped: [] })).toBe(true);
+});
+
 test("deadline, mood, say and delegated", () => {
   expect(
     valid("question", {
