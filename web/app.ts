@@ -549,6 +549,8 @@ function listen(sid: string, keys: Keys, st: State) {
     try {
       q = JSON.parse(await open(keys, sid, "q", seq, JSON.parse(data)));
     } catch {
+      const msg = "A message from the agent failed verification and was ignored. If this repeats, ask the agent for a new link.";
+      if (cur) { cur.f.err.textContent = msg; return; } // keep what the user has typed
       return status("error", "A message failed verification", "It was ignored. If this repeats, ask the agent for a new link.");
     }
     const target = cur && !cur.sending ? cur : null;

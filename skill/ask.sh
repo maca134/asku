@@ -110,7 +110,7 @@ join() {
   [ ! -f "$S/sid" ] || die "session '${ASKU_SESSION:-default}' is in use; run: $0 close, or set ASKU_SESSION"
   [[ ${1:-} =~ ^(https?://[^/#]+)/j/([A-Za-z0-9_-]{22})#([0-9a-f]{64})\.([0-9a-f]{32})$ ]] || die "not an asku agent link: ${1:-}"
   BASE=${BASH_REMATCH[1]}
-  local sid=${BASH_REMATCH[2]} hash=${BASH_REMATCH[3]} t=${BASH_REMATCH[4]} pub
+  local sid=${BASH_REMATCH[2]} hash=${BASH_REMATCH[3]} t=${BASH_REMATCH[4]} pub k
   req GET "/s/$sid" || die "relay unreachable: $BASE"
   [ "$CODE" = 200 ] || die "session not found ($CODE); ask the user for a new link"
   pub=$(printf %s "$BODY" | jget pub)
@@ -120,13 +120,14 @@ join() {
   req POST "/s/$sid/bind" "{\"pub\":\"$(state pub)\",\"mac\":\"$(bindmac "$t" "$(state pub)")\"}" || { rm -rf "$S"; die "relay unreachable: $BASE"; }
   [ "$CODE" = 201 ] || { rm -rf "$S"; die "join failed ($CODE): $BODY"; } # 409: someone already joined
   save_session "$sid" "$(printf %s "$BODY" | jget key)"
-  derive "$S/a.pem" "$pub" > "$S/K"
+  k=$(derive "$S/a.pem" "$pub") || { rm -rf "$S"; die "key agreement failed"; }
+  printf %s "$k" > "$S/K"
   echo 0 > "$S/seq"
   printf '{"questions":[]}' > "$S/o0.json" # the opening note arrives as answer 0
 }
 
 link() { printf '%s/a/%s#%s' "$BASE" "$(state sid)" "$(fragment "$(state pub)" "$(state T)")"; }
-gone() { rm -rf "$S"; die "session expired or closed"; }
+gone() { rm -rf "$S"; die "session expired or closed; run: $0 ask <file> to start a new one"; }
 
 # The open form is a list of batches: q<seq>.json are queued (not sent yet), o<seq>.json are sent and unanswered.
 batches() { local f; for f in "$S/$1"*.json; do [ -e "$f" ] || continue; f=${f##*/"$1"}; echo "${f%.json}"; done | sort -n; }
@@ -153,7 +154,7 @@ add() {
 # send [nowait]: waits for the bind (or checks it once), then sends the queued batches. Returns 1 if not bound yet.
 send() {
   [ -f "$S/sid" ] || die "no session; run: $0 ask <file>"
-  local sid n pub
+  local sid n pub k
   sid=$(state sid)
   DEADLINE=$((SECONDS + WAIT))
   if [ -n "${1:-}" ] && [ ! -f "$S/K" ]; then
@@ -170,7 +171,8 @@ send() {
              req DELETE "/s/$sid" || true; rm -rf "$S"
              die "the link was opened without the right token; session closed, start a new one"
            fi
-           derive "$S/a.pem" "$pub" > "$S/K" ;;
+           k=$(derive "$S/a.pem" "$pub") || die "key agreement failed"
+           printf %s "$k" > "$S/K" ;; # only once derive worked: an empty K would pass for bound
       204) ;;
       404) gone ;;
       *) die "bind poll failed ($CODE): $BODY" ;;
@@ -178,7 +180,10 @@ send() {
   done
   for n in $(batches q); do
     BODY=$(seal "$(state K)" "$sid" q "$n" < "$S/q$n.json")
-    until req POST "/s/$sid/q" "$BODY"; do sleep 2; done
+    until req POST "/s/$sid/q" "$BODY"; do
+      [ $SECONDS -lt $DEADLINE ] || pending "Could not reach the relay at $BASE; questions are still queued."
+      sleep 2
+    done
     [ "$CODE" = 204 ] || [ "$CODE" = 409 ] || die "send failed ($CODE): $BODY" # 409: an earlier run already sent it
     echo "$n" > "$S/seq"
     mv "$S/q$n.json" "$S/o$n.json"
@@ -195,17 +200,16 @@ answer() {
   # From the oldest open batch, not a cursor: an error for batch 3 can land before the answer to batch 2.
   after=$(( $(batches o | head -n1) - 1 ))
   while :; do
-    [ $SECONDS -lt $DEADLINE ] || pending "The user has not answered yet."
+    [ $SECONDS -lt $DEADLINE ] || pending "The user has not answered yet.$([ ! -f "$S/T" ] || printf ' If they lost the page, their link is: %s' "$(link)")"
     req GET "/s/$sid/a?after=$after" || { sleep 2; continue; }
     case $CODE in
       200) list=${BODY#[}; list=${list%]}; nl=$'}\n{'; env=
            # flat envelopes in seq order, one per line: take the first for a batch still open
            while IFS= read -r e; do
-             after=$(printf %s "$e" | jget seq)
-             if [ -f "$S/o$after.json" ]; then env=$e; break; fi
+             seq=$(printf %s "$e" | jget seq)
+             if [ -f "$S/o$seq.json" ]; then env=$e; break; fi
            done <<< "${list//\},\{/$nl}"
-           [ -n "$env" ] || continue # all already handled
-           seq=$after
+           [ -n "$env" ] || { sleep 2; continue; } # all already handled; keep the cursor, a lower seq can still arrive
            text=$(open "$(state K)" "$sid" a "$seq" "$(printf %s "$env" | jget iv)" "$(printf %s "$env" | jget ct)" \
              "$(printf %s "$env" | jget tag)") || die "answer failed verification"
            err=; [[ $text != *'"error":"invalid question'* ]] || err=1 # only the page writes that, and only as a key

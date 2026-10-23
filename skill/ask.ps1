@@ -96,9 +96,10 @@ $S = Join-Path $Root $(if ($env:ASKU_SESSION) { $env:ASKU_SESSION } else { 'defa
 $urlFile = Join-Path $S 'url' # a joined session lives on its link's relay
 $Base = if (Test-Path $urlFile) { [IO.File]::ReadAllText($urlFile).Trim() } elseif ($env:ASKU_URL) { $env:ASKU_URL } else { 'https://asku.dev' }
 $WaitSec = if ($env:ASKU_WAIT) { [int]$env:ASKU_WAIT } else { 500 } # no new poll after this; agent tool timeouts are ~600s
+$Self = "powershell -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" # how messages tell the agent to run us again
 
 function Fail([string]$Msg) { [Console]::Error.WriteLine("asku: $Msg"); exit 1 }
-function Pending([string]$Msg) { [Console]::Out.Write("PENDING`n$Msg`nRun again to keep waiting: $PSCommandPath wait`n"); exit 2 }
+function Pending([string]$Msg) { [Console]::Out.Write("PENDING`n$Msg`nRun again to keep waiting: $Self wait`n"); exit 2 }
 function Get-State([string]$Name, $Default = $null) { $p = Join-Path $S $Name; if (Test-Path $p) { [IO.File]::ReadAllText($p).Trim() } else { $Default } }
 function Set-State([string]$Name, $Value) { [IO.File]::WriteAllText((Join-Path $S $Name), "$Value") }
 function Remove-Session { if (Test-Path $S) { Remove-Item -Recurse -Force $S } }
@@ -155,7 +156,7 @@ function Start-AskuSession {
 
 # Joins a session the user started on the website. Resume-Asku then prints their opening note.
 function Join-AskuSession([string]$Link) {
-    if (Test-Path (Join-Path $S 'sid')) { Fail "session is in use; run: $PSCommandPath close, or set ASKU_SESSION" }
+    if (Test-Path (Join-Path $S 'sid')) { Fail "session is in use; run: $Self close, or set ASKU_SESSION" }
     if ($Link -notmatch '^(https?://[^/#]+)/j/([A-Za-z0-9_-]{22})#([0-9a-f]{64})\.([0-9a-f]{32})$') { Fail "not an asku agent link: $Link" }
     $script:Base = $Matches[1]
     $sid = $Matches[2]; $hash = $Matches[3]; $token = ConvertFrom-AskuHex $Matches[4]
@@ -183,7 +184,7 @@ function Get-Link {
     "$Base/a/$(Get-State 'sid')#$frag"
 }
 
-function Exit-Gone { Remove-Session; Fail 'session expired or closed' }
+function Exit-Gone { Remove-Session; Fail "session expired or closed; run: $Self ask <file> to start a new one" }
 
 # The open form is a list of batches: q<seq>.json are queued (not sent yet), o<seq>.json are sent and unanswered.
 function Get-Batches([string]$Kind) {
@@ -211,7 +212,7 @@ function Add-AskuBatch([string]$File) {
 
 # Waits for the bind (or checks it once with -NoWait), then sends the queued batches. Returns the keys, or $null if not bound yet.
 function Send-Asku([switch]$NoWait) {
-    if (-not (Test-Path (Join-Path $S 'sid'))) { Fail "no session; run: $PSCommandPath ask <file>" }
+    if (-not (Test-Path (Join-Path $S 'sid'))) { Fail "no session; run: $Self ask <file>" }
     $sid = Get-State 'sid'
     $deadline = (Get-Date).AddSeconds($WaitSec)
     if ($NoWait -and -not (Test-Path (Join-Path $S 'peer'))) {
@@ -241,7 +242,10 @@ function Send-Asku([switch]$NoWait) {
     foreach ($seq in Get-Batches 'q') {
         $f = Join-Path $S "q$seq.json"
         $envelope = Protect-AskuMessage $keys $sid 'q' $seq ([IO.File]::ReadAllBytes($f)) | ConvertTo-Json -Compress
-        do { $r = Invoke-AskuRequest POST "/s/$sid/q" $envelope; if (-not $r) { Start-Sleep 2 } } until ($r)
+        do {
+            $r = Invoke-AskuRequest POST "/s/$sid/q" $envelope
+            if (-not $r) { if ((Get-Date) -ge $deadline) { Pending "Could not reach the relay at $Base; questions are still queued." }; Start-Sleep 2 }
+        } until ($r)
         if ($r.Code -ne 204 -and $r.Code -ne 409) { Fail "send failed ($($r.Code)): $($r.Body)" } # 409: an earlier run already sent it
         Set-State 'seq' $seq
         Move-Item -Force $f (Join-Path $S "o$seq.json")
@@ -253,25 +257,25 @@ function Send-Asku([switch]$NoWait) {
 # an {error} answers just its own (the page dropped that batch and kept the rest open).
 function Wait-Asku {
     $c = Send-Asku
-    if (-not (Get-Batches 'o').Count) { Fail "no question pending; run: $PSCommandPath ask <file>" }
+    if (-not (Get-Batches 'o').Count) { Fail "no question pending; run: $Self ask <file>" }
     # From the oldest open batch, not a cursor: an error for batch 3 can land before the answer to batch 2.
     $after = @(Get-Batches 'o')[0] - 1
     while ($true) {
-        if ((Get-Date) -ge $c.Deadline) { Pending 'The user has not answered yet.' }
+        if ((Get-Date) -ge $c.Deadline) { Pending "The user has not answered yet.$(if (Get-State 'T') { " If they lost the page, their link is: $(Get-Link)" })" }
         $r = Invoke-AskuRequest GET "/s/$($c.Sid)/a?after=$after"
         if (-not $r) { Start-Sleep 2; continue }
         switch ($r.Code) {
             200 {
                 $all = @($r.Body | ConvertFrom-Json | ForEach-Object { $_ }) # PS 5.1 emits a JSON array as one object
                 $env = $all | Where-Object { Test-Path (Join-Path $S "o$($_.seq).json") } | Select-Object -First 1
-                if (-not $env) { $after = $all[-1].seq; break } # all already handled
+                if (-not $env) { Start-Sleep 2; break } # all already handled; keep the cursor, a lower seq can still arrive
                 $seq = [int]$env.seq
                 try { $text = [Text.Encoding]::UTF8.GetString((Unprotect-AskuMessage $c.Keys $c.Sid 'a' $seq $env)) } catch { Fail 'answer failed verification' }
                 $isError = $(try { [bool]($text | ConvertFrom-Json).error } catch { $false })
                 foreach ($n in Get-Batches 'o') { if ($n -eq $seq -or ($n -lt $seq -and -not $isError)) { Remove-Item (Join-Path $S "o$n.json") } }
                 [Console]::Out.Write($text + "`n")
                 $left = (Get-Batches 'o').Count
-                if ($left) { [Console]::Error.WriteLine("asku: $left batch(es) still pending; run: $PSCommandPath wait") }
+                if ($left) { [Console]::Error.WriteLine("asku: $left batch(es) still pending; run: $Self wait") }
                 exit 0
             }
             204 {}
@@ -282,19 +286,19 @@ function Wait-Asku {
 }
 
 $usage = @"
-usage: $PSCommandPath ask <questions.json>   send a question, print the answer JSON
-       $PSCommandPath add <questions.json>   append questions to the open form without waiting
-       $PSCommandPath join <agent link>      join a session the user started, print their opening note
-       $PSCommandPath wait                   keep waiting after PENDING
-       $PSCommandPath close                  end the session
-       $PSCommandPath version                print the client version
+usage: $Self ask <questions.json>   send a question, print the answer JSON
+       $Self add <questions.json>   append questions to the open form without waiting
+       $Self join <agent link>      join a session the user started, print their opening note
+       $Self wait                   keep waiting after PENDING
+       $Self close                  end the session
+       $Self version                print the client version
 exit: 0 answered, 1 error, 2 PENDING (run wait)
 env: ASKU_URL ASKU_SESSION ASKU_HOME ASKU_WAIT
 "@
 
 switch ($Command) {
     'ask' {
-        if ((Get-Batches 'q').Count + (Get-Batches 'o').Count) { Fail "a form is open; run: $PSCommandPath add <file> to append, or $PSCommandPath wait" }
+        if ((Get-Batches 'q').Count + (Get-Batches 'o').Count) { Fail "a form is open; run: $Self add <file> to append, or $Self wait" }
         $fresh = -not (Test-Path (Join-Path $S 'sid'))
         Add-AskuBatch $File
         if ($fresh) { Pending "Give the user this link: $(Get-Link)" }

@@ -25,7 +25,7 @@ curl -fsSLO https://asku.dev/ask.sh && chmod +x ask.sh      # Linux/macOS: needs
 iwr https://asku.dev/ask.ps1 -OutFile ask.ps1                # Windows: PowerShell 5.1+, nothing else
 ```
 
-On Windows run it as `powershell -NoProfile -ExecutionPolicy Bypass -File ask.ps1 <command> ...`.
+On Windows run it as `powershell -NoProfile -ExecutionPolicy Bypass -File ask.ps1 <command> ...` (its messages print that full command).
 Below, `ask` means whichever script you use.
 
 ## Commands
@@ -40,14 +40,17 @@ Below, `ask` means whichever script you use.
 | `ask version` | Print the client version |
 
 Exit codes, check every time:
-- `0`: answer JSON on stdout.
-- `2`: stdout starts with `PENDING`. If it prints a link, show it to the user verbatim. Then run `ask wait` (again, as often as needed).
-- `1`: error on stderr.
+- `0`: answer JSON on stdout. It may be an `error` answer instead (see Answer format). If stderr says batches are still open, run `ask wait` again for their answers.
+- `2`: stdout starts with `PENDING`. Show the first link to the user verbatim; later messages repeat it only in case they lost the page. Then run `ask wait` (again, as often as needed).
+- `1`: error on stderr, with the command to run next where there is one.
 
-Each call returns within ~9 minutes so it fits a tool timeout; `PENDING` just means the user hasn't answered yet.
+**Timeouts.** `ask`, `wait` and `join` wait up to `ASKU_WAIT` seconds (default 500) and then exit `2`. Run them with a
+tool timeout of 10 minutes (Claude Code's Bash: `timeout: 600000`), or set `ASKU_WAIT` below your tool's timeout.
+`PENDING` just means the user hasn't answered yet.
 
 ## Flow
 
+0. Starting a new task? Run `ask close` first, so a session left over from earlier can't swallow your questions.
 1. Write the questions to a file and run `ask ask q.json`. The first call exits `2` right away with the link: give it to the user.
 2. Run `ask wait` until it exits `0`.
 3. Ask follow-ups with more `ask ask` calls in the same session, one form at a time: the next `ask` is refused until the last one is answered.
@@ -57,9 +60,9 @@ Each call returns within ~9 minutes so it fits a tool timeout; `PENDING` just me
 of the form the user has open and `add` returns at once (exit `2`; the first one prints the link). Run `ask wait` when you
 need the answers: one submit returns one answer covering every batch. Ids must be unique across the open form, and
 it holds 50 questions at most (`add` refuses otherwise). If `wait` says on stderr that batches are still pending,
-the user submitted before they arrived: they are now the next form, so run `wait` again.
+some of the form is still unanswered (for example the user submitted before a batch arrived): run `wait` again.
 
-If the user pastes a link like `https://asku.dev/j/<id>#…`, run `ask join '<link>'` (quote it, it has a `#`) instead of step 1. It prints `{"note": "…"}`, the user's opening message. Then continue from step 3.
+If the user pastes a link like `https://asku.dev/j/<id>#…`, run `ask join '<link>'` (quote it, it has a `#`) instead of step 1. It prints `{"note": "…"}`, the user's opening message (it can exit `2` first: then `ask wait`). If it says the session is in use, `ask close` or set `ASKU_SESSION`. Then continue from step 3.
 
 Sessions are named by `ASKU_SESSION` (default `default`). Use a different name to run separate conversations at once.
 
