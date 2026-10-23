@@ -93,14 +93,14 @@ function shell(kids: Kid[], tag: "main" | "div" = "main") {
   const answering = tag === "main" && location.pathname.startsWith("/a/");
   return h("div", { className: "shell" },
     // no home link on an answer page: one stray tap would lose a half-filled form
-    h("header", { className: "topbar" }, logo(answering ? undefined : "/"), answering ? sess : null, answering ? bellBtn() : null, h("span", { className: "e2e", title: "End-to-end encrypted" }, icon("lock"), h("span", { textContent: "End-to-end encrypted" }))),
+    h("header", { className: "topbar" }, logo(answering ? undefined : "/"), answering ? sess : null, answering ? sessTime : null, answering ? bellBtn() : null, h("span", { className: "e2e", title: "End-to-end encrypted" }, icon("lock"), h("span", { textContent: "End-to-end encrypted" }))),
     h(tag, { className: "shell-main" }, ...kids));
 }
 
 // ---- session name (set by the agent) and running time, in the top bar and the tab title
 const sessName = h("b");
 const sessTime = h("span", { className: "sess-time", title: "Session running time" });
-const sess = h("span", { className: "sess" }, sessName, sessTime);
+const sess = h("span", { className: "sess" }, sessName);
 const tabTitle = () => (sessName.textContent ? `${sessName.textContent} · asku` : "asku");
 function nameSession(name: string) {
   sessName.textContent = sessName.title = name;
@@ -176,7 +176,8 @@ function say(text: string) {
 }
 const batchName = (q: Question) => q.title || q.questions[0].label;
 const event = (ico: string, text: string, cls = "") => h("li", { className: `event ${cls}` }, icon(ico), h("span", { textContent: text }));
-const waiting = () => h("div", { className: "waiting" }, live("Waiting for the agent's next question…"));
+const WORKING = "Your agent is working. Updates and new questions will appear here.";
+const waiting = () => h("div", { className: "waiting" }, live(WORKING));
 
 type Kind = "wait" | "done" | "error" | "agent";
 function stateEl(kind: Kind, title: string, detail?: string, ...extra: Kid[]) {
@@ -415,7 +416,7 @@ async function send(sid: string, keys: Keys, st: State, seqs: number[], a: Answe
   await save(sid, st);
 }
 
-const sentState = () => stateEl("done", "Answers sent", "Encrypted on this device and delivered to your agent. Keep this tab open for follow-up questions.", live("Waiting for the agent's next question…"));
+const sentState = () => stateEl("done", "Answers sent", "Encrypted on this device and delivered to your agent. Keep this tab open for follow-up questions.", live(WORKING));
 const smooth = (): ScrollBehavior => (matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
 
 type Batch = [seq: number, q: Question];
@@ -604,26 +605,29 @@ function landing() {
 
   const hero = h("section", { className: "hero" },
     h("div", { className: "wrap hero-copy" },
-      h("p", { className: "pill" }, icon("lock"), h("span", { textContent: "End-to-end encrypted · open source" })),
+      h("p", { className: "pill" }, icon("lock"), h("span", { textContent: "End-to-end encrypted · No account · Open source" })),
       h("h1", {}, "Your agent asks.", h("br"), h("span", { className: "grad", textContent: "You answer from anywhere." })),
       p(PAGES["/"].lead, "lead"),
       h("div", { className: "ctas" },
         h("a", { className: "btn btn-primary btn-lg", href: "/install" }, "Install the skill", icon("arrow")),
-        h("a", { className: "btn btn-secondary btn-lg", href: "/start" }, "Start from the website"))),
+        h("a", { className: "btn btn-secondary btn-lg", href: "/start" }, "Already chatting? Get a link"))),
     h("div", { className: "wrap" }, demo()));
 
   const step = (n: string, ico: string, title: string, text: string) =>
     h("li", { className: "step" }, h("div", { className: "step-top" }, h("span", { className: "step-icon" }, icon(ico)), h("span", { className: "step-n", textContent: n })), h("h3", { textContent: title }), p(text));
-  const how = h("section", { className: "sec", id: "how" }, h("div", { className: "wrap" },
-    head("How it works", "/how"),
-    h("ol", { className: "steps" },
-      step("01", "terminal", "Your agent asks", "It writes a form as JSON and runs `ask.sh ask q.json`. A key pair is made on its machine."),
-      step("02", "link", "You get a link", "The agent shows you a link. Open it on your phone, a tablet, or any browser."),
-      step("03", "phone", "You answer", "Tap through yes/no, choices, text and numbers. Add comments. It's encrypted before it leaves the page."),
-      step("04", "json", "It carries on", "`ask.sh wait` returns your answers as JSON. Follow-up questions land in the same tab."))));
+  const steps = () => h("ol", { className: "steps" },
+    step("01", "terminal", "Your agent asks", "It writes a form as JSON and runs `ask.sh ask q.json`. A key pair is made on its machine."),
+    step("02", "link", "You get a link", "The agent shows you a link. Open it on your phone, a tablet, or any browser."),
+    step("03", "phone", "You answer", "Tap through yes/no, choices, text and numbers. Add comments. It's encrypted before it leaves the page."),
+    step("04", "json", "It carries on", "`ask.sh wait` returns your answers as JSON. Follow-up questions land in the same tab."));
+  const how = h("section", { className: "sec", id: "how" }, h("div", { className: "wrap" }, head("How it works", "/how"), steps()));
+  const homeHow = h("section", { className: "sec" }, h("div", { className: "wrap" },
+    sub("How it works", "Four steps, no account", "A script on the agent's side and a web page on yours."), steps()));
 
   const node = (ico: string, title: string, sub: string, cls = "") => h("div", { className: `node ${cls}` }, h("span", { className: "node-icon" }, icon(ico)), h("strong", { textContent: title }), h("span", { className: "node-sub", textContent: sub }));
   const point = (ico: string, title: string, text: string) => h("li", { className: "point" }, h("span", { className: "point-icon" }, icon(ico)), h("div", {}, h("h3", { textContent: title }), p(text)));
+  const keysPoint = () => point("key", "Keys stay on the endpoints", "P-256 key pairs are made on the agent's machine and in your browser, where the private key is non-extractable.");
+  const ciphertextPoint = () => point("lock", "Ciphertext only", "Every message is AES-256-CBC with an HMAC-SHA256 tag, checked before decrypting. Sessions are purged on close or after 24h idle.");
   const security = h("section", { className: "sec" }, h("div", { className: "wrap" },
     head("Security", "/security"),
     h("div", { className: "flow", ariaHidden: "true" },
@@ -633,10 +637,15 @@ function landing() {
       h("div", { className: "wire" }, h("span", { className: "packet" })),
       node("phone", "Your browser", "key pair B")),
     h("ul", { className: "points" },
-      point("key", "Keys stay on the endpoints", "P-256 key pairs are made on the agent's machine and in your browser, where the private key is non-extractable."),
-      point("lock", "Ciphertext only", "Every message is AES-256-CBC with an HMAC-SHA256 tag, checked before decrypting. Sessions are purged on close or after 24h idle."),
+      keysPoint(),
+      ciphertextPoint(),
       point("link", "The secret rides in the fragment", "The part of the link after `#` never reaches the server. The page checks the agent's key against it, then clears it from history."),
       point("shield", "Small enough to audit", "bash + openssl, PowerShell + .NET and WebCrypto, all checked against the same test vectors. The whole thing is open source.")),
+    next("Install the skill", "/install")));
+  const homeSecurity = h("section", { className: "sec" }, h("div", { className: "wrap" },
+    sub("Security", "The relay only sees ciphertext", "Encryption happens on your agent's machine and in your browser."),
+    h("ul", { className: "points" }, keysPoint(), ciphertextPoint()),
+    h("p", { className: "more" }, h("a", { href: "/security" }, "How the encryption works", icon("arrow"))),
     next("Install the skill", "/install")));
 
   const controls = h("section", { className: "sec sec-alt" }, h("div", { className: "wrap" }, h("div", { className: "split" },
@@ -646,7 +655,7 @@ function landing() {
     showcase())));
 
   // the real controls, straight on the page; ids are prefixed so their radio groups can't meet the demo's
-  const ctl = (code: string, ...kids: Kid[]) => h("div", { className: "ctl" }, h("code", { className: "ctl-type", textContent: code }), ...kids);
+  const ctl = (code: string, kid: Kid, cls = "") => h("div", { className: `ctl ${cls}` }, h("code", { className: "ctl-type", textContent: code }), kid);
   const CTLS: Item[] = [
     { id: "ctl-go", type: "confirm", label: "Deploy v2.3 now?" },
     { id: "ctl-env", type: "single", label: "Target", options: ["staging", { value: "prod", label: "Production", md: "Live traffic" }], default: "staging" },
@@ -655,14 +664,27 @@ function landing() {
     { id: "ctl-name", type: "text", label: "Release name", placeholder: "e.g. Autumn cleanup" },
     { id: "ctl-notes", type: "text", label: "Release notes", multiline: true, md: "Markdown works on forms, questions and options: **bold**, `code`, lists, tables." },
   ];
+  // moods: tap a chip and a sample question puts it on
+  const moodCard = h("div", { className: "mood-demo" });
+  const moodChips = (Object.keys(MOODS) as Mood[]).map((m) => h("button", { type: "button", className: "btn btn-secondary btn-sm", textContent: `"${m}"`, ariaPressed: "false", onclick: () => setMood(m) }));
+  const setMood = (m: Mood) => {
+    moodChips.forEach((c) => { c.ariaPressed = String(c.textContent === `"${m}"`); });
+    moodCard.className = `mood-demo mood-${m}`;
+    moodCard.replaceChildren(moodEl(m), field({ id: "ctl-mood", type: "confirm", label: "Ship it?" }, CTLS.length).el,
+      h("button", { type: "button", className: "btn btn-primary btn-send" }, icon("lock"), "Send answers"));
+  };
+  setMood("nervous");
   const clockAt = h("span");
   const gallery = h("section", { className: "sec sec-alt" }, h("div", { className: "wrap" },
-    sub("Controls", "Every control, for real", "These are the actual controls on the answer page. Try them: each one takes a comment, and any question can be left to the agent."),
+    sub("Controls", "Every control, live", "The answer page's real code. Tap around: any question takes a comment, or can be left to the agent."),
     h("div", { className: "ctls" },
-      ...CTLS.map((it, i) => ctl(`"type": "${it.type}"${it.type === "text" && it.multiline ? ', "multiline": true' : ""}`, field(it, i).el)),
-      ctl('"deadline": 1800', clockAt),
-      ctl('"mood": "…"', ...(Object.keys(MOODS) as Mood[]).map(moodEl)))));
-  countdown(clockAt, 1800, () => true);
+      ...CTLS.map((it, i) => ctl(`type: ${it.type}${it.type === "text" && it.multiline ? " · multiline" : ""}`, field(it, i).el)),
+      ctl("form-level", h("div", { className: "card ctl-form" },
+        h("div", {}, h("h3", { textContent: "Deadline" }), p("The page counts down. At zero the agent goes ahead without you.", "fine"), clockAt),
+        h("div", {}, h("h3", { textContent: "Mood" }), p("Changes how the form looks. Pick one.", "fine"),
+          h("div", { className: "clis mood-chips", role: "group", ariaLabel: "Mood" }, ...moodChips), moodCard)), "ctl-wide")),
+    next("Install the skill", "/install")));
+  countdown(clockAt, 1800, () => clockAt.isConnected);
 
   const faq = h("section", { className: "sec" }, h("div", { className: "wrap narrow" },
     sub("FAQ", "Questions people ask", "The short answers."),
@@ -681,10 +703,10 @@ function landing() {
         h("p", { className: "card-label", textContent: "Windows · PowerShell 5.1+, nothing else" }),
         copyable(`iwr ${location.origin}/ask.ps1 -OutFile ask.ps1`, ">"),
         p("Then point your agent at `/skill.md` for the commands and the question format.", "fine"))),
-    next("Start from the website", "/start")));
+    next("See it in action", "/demo")));
 
   const stage = h("div", {}, demo(SCENES[0]));
-  const tabs = SCENES.map((sc) => h("button", { type: "button", className: "btn btn-secondary", textContent: sc.name, ariaPressed: String(sc === SCENES[0]) }));
+  const tabs = SCENES.map((sc) => h("button", { type: "button", className: "btn btn-secondary", textContent: `${sc.cli.name} · ${sc.name}`, ariaPressed: String(sc === SCENES[0]) }));
   tabs.forEach((t, i) => t.onclick = () => {
     tabs.forEach((x) => { x.ariaPressed = String(x === t); });
     stage.replaceChildren(demo(SCENES[i]));
@@ -692,8 +714,7 @@ function landing() {
   const demos = h("section", { className: "sec" }, h("div", { className: "wrap" },
     head("Demo", "/demo"),
     h("div", { className: "clis", role: "group", ariaLabel: "Situation" }, ...tabs),
-    stage,
-    next("Install the skill", "/install")));
+    stage));
 
   const start = h("section", { className: "sec" }, h("div", { className: "wrap narrow" },
     head("Start here", "/start"),
@@ -736,7 +757,7 @@ function landing() {
       h("a", { href: "/terms", textContent: "Terms" }))));
 
   const missing = h("section", { className: "sec" }, h("div", { className: "wrap narrow" }, stateEl("error", "Page not found", "There's nothing at this address."), next("Go home", "/")));
-  const body = { "/": [hero], "/how": [how, controls, faq], "/security": [security], "/demo": [demos, gallery], "/install": [install], "/start": [start], "/terms": [terms] }[path] ?? [missing];
+  const body = { "/": [hero, homeHow, controls, homeSecurity], "/how": [how, faq], "/security": [security], "/demo": [demos, gallery], "/install": [install], "/start": [start], "/terms": [terms] }[path] ?? [missing];
   document.title = PAGES[path]?.title ?? "Not found · asku";
   app.replaceChildren(header, h("main", { className: "landing" }, ...body), footer);
 }
@@ -884,7 +905,11 @@ function listen(sid: string, keys: Keys, st: State) {
     if (es.readyState === EventSource.CLOSED) return status("error", "This session has ended or expired", undefined, startNew(), home());
     // the browser reconnects by itself; say so instead of a "Connected" that isn't
     const l = app.querySelector(".live");
-    if (l?.lastChild) { l.lastChild.textContent = "Reconnecting…"; es.addEventListener("open", () => (l.lastChild!.textContent = "Waiting for the agent's question…"), { once: true }); }
+    if (l?.lastChild && l.lastChild.textContent !== "Reconnecting…") {
+      const was = l.lastChild.textContent;
+      l.lastChild.textContent = "Reconnecting…";
+      es.addEventListener("open", () => (l.lastChild!.textContent = was), { once: true });
+    }
   };
 }
 
@@ -930,7 +955,7 @@ function countdown(at: Element, secs: number, alive: () => boolean, moving = () 
 // The real form, lightly interactive, next to the JSON it would send.
 function showcase() {
   const f = buildForm({ ...example, mood: "confident" } as Question);
-  countdown(f.fields[0].el, 1800, () => true);
+  countdown(f.fields[0].el, 1800, () => out.isConnected);
   const out = h("pre", { className: "json", ariaLive: "polite", ariaLabel: "Answer JSON" });
   const update = () => out.replaceChildren(...jsonNodes(f.collect(false).a));
   f.form.addEventListener("input", update);
@@ -952,11 +977,11 @@ function showcase() {
 }
 
 // How each agent CLI draws its chat (approximated with text and colours, no logos).
-type Cli = { id: string; title: string; say: string; tool: string; run: (c: string) => string };
-const SHELL: Cli = { id: "shell", title: "agent — ~/shop", say: "● ", tool: "$ ", run: (c) => c };
-const CLAUDE: Cli = { id: "claude", title: "claude — ~/shop", say: "● ", tool: "● ", run: (c) => `Bash(${c})` };
-const CODEX: Cli = { id: "codex", title: "codex — ~/shop", say: "• ", tool: "• ", run: (c) => `Ran ${c}` };
-const GEMINI: Cli = { id: "gemini", title: "gemini — ~/shop", say: "✦ ", tool: "✔ ", run: (c) => `Shell ${c}` };
+type Cli = { id: string; name: string; title: string; say: string; tool: string; run: (c: string) => string };
+const SHELL: Cli = { id: "shell", name: "Any agent", title: "agent — ~/shop", say: "● ", tool: "$ ", run: (c) => c };
+const CLAUDE: Cli = { id: "claude", name: "Claude Code", title: "claude — ~/shop", say: "● ", tool: "● ", run: (c) => `Bash(${c})` };
+const CODEX: Cli = { id: "codex", name: "Codex CLI", title: "codex — ~/shop", say: "• ", tool: "• ", run: (c) => `Ran ${c}` };
+const GEMINI: Cli = { id: "gemini", name: "Gemini CLI", title: "gemini — ~/shop", say: "✦ ", tool: "✔ ", run: (c) => `Shell ${c}` };
 
 // One demo run: what you ask, the form, an optional `ask say` update and `ask add` follow-up, your taps on the phone, and what the agent does next.
 type Act = ["pick", string, string] | ["up", string, number] | ["comment", string, string] | ["text", string, string] | ["dice", string, ""];
@@ -1022,7 +1047,7 @@ function demo(sc = DEPLOY) {
   const scroller = h("div", { className: "screen-scroll" });
   const tap = h("span", { className: "tap" });
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let paused = false, visible = true, gen = 0;
+  let paused = false, visible = true, gen = 0, first = true; // the first run opens on the prompt, not a blank terminal
   const STOP = Symbol();
 
   const toggle = h("button", { type: "button", className: "demo-toggle" });
@@ -1031,14 +1056,14 @@ function demo(sc = DEPLOY) {
   setToggle();
 
   const root = h("figure", { className: `demo cli-${cli.id}` },
+    h("figcaption", { className: "demo-cap" },
+      h("span", {}, ...rich(sc.cap)),
+      still ? null : toggle),
     h("div", { className: "demo-stage", ariaHidden: "true", inert: true },
       h("div", { className: "term" },
         h("div", { className: "term-bar" }, h("span", { className: "dots" }), h("span", { className: "term-title", textContent: cli.title })),
         term),
-      phone(url, scroller, tap)),
-    h("figcaption", { className: "demo-cap" },
-      h("span", {}, ...rich(sc.cap)),
-      still ? null : toggle));
+      phone(url, scroller, tap)));
 
   new IntersectionObserver(([e]) => { visible = e.isIntersecting; }).observe(root);
 
@@ -1120,9 +1145,8 @@ function demo(sc = DEPLOY) {
     // stops on the next loop, or when the scene is switched
     if (sc.q.deadline) countdown(f.fields[0].el, sc.q.deadline, () => my === gen && root.isConnected, () => !paused && visible && !fast);
 
-    await wait(700);
     const you = line("prompt", h("span", { className: "t-dim", textContent: "› " }));
-    await type(you, sc.you);
+    if (first) { first = false; you.append(sc.you); } else { await wait(700); await type(you, sc.you); }
     await wait(500);
     say(sc.intro);
     await wait(600);

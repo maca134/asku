@@ -10,7 +10,7 @@ export const PAGES: Record<string, Page> = {
     title: "asku: ask the user from Claude Code, Codex and Cursor, answer on your phone",
     description: "asku lets Claude Code, Codex, Cursor or any AI agent send you a question form you answer on your phone. End-to-end encrypted, no app, no account. The agent gets JSON back.",
     h1: "Your agent asks. You answer from anywhere.",
-    lead: "asku turns questions from Claude Code, Codex, Cursor or any other agent into a rich form you answer on your phone. The agent gets JSON back and keeps working. The relay in between only ever sees ciphertext.",
+    lead: "Claude Code, Codex, Cursor or any agent sends you a form. Answer on your phone; it gets JSON back and keeps going. The relay only sees ciphertext.",
   },
   "/how": {
     nav: "How it works",

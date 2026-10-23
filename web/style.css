@@ -117,6 +117,8 @@ code { font-family: var(--mono); font-size: .86em; background: var(--bg-2); bord
 .nav-gh .icon { width: 1.25rem; height: 1.25rem; }
 .nav a { white-space: nowrap; }
 @media (max-width: 639px) { .nav { gap: 0; } .nav a { font-size: .8rem; padding: .4rem .32rem; } }
+/* a phone: GitHub is in the footer and Start is in the hero, so the rest get real tap targets */
+@media (max-width: 479px) { .nav a:is(.nav-gh, [href="/start"]) { display: none; } .nav a { font-size: .85rem; padding: .6rem .35rem; } .bar { gap: .5rem; } }
 .next { display: flex; justify-content: center; margin-top: 3rem; }
 
 .hero { position: relative; padding: 3.5rem 0 3.5rem; overflow: hidden; isolation: isolate; }
@@ -152,7 +154,7 @@ code { font-family: var(--mono); font-size: .86em; background: var(--bg-2); bord
 .demo { margin: 0; }
 .demo-stage { display: grid; gap: 1.5rem; justify-items: center; }
 @media (min-width: 900px) { .demo-stage { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2.5rem; max-width: 64rem; margin: 0 auto; } }
-.demo-cap { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .6rem 1rem; margin-top: 1.5rem; color: var(--muted); font-size: .875rem; text-align: center; }
+.demo-cap { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .6rem 1rem; margin: 0 0 1.5rem; color: var(--muted); font-size: .875rem; text-align: center; }
 .demo-toggle {
   display: inline-flex; align-items: center; gap: .35rem; font: inherit; font-size: .8rem; font-weight: 600; color: var(--fg-2);
   background: var(--surface); border: 1px solid var(--line-2); border-radius: 999px; padding: .3rem .75rem .3rem .6rem; cursor: pointer;
@@ -166,8 +168,9 @@ code { font-family: var(--mono); font-size: .86em; background: var(--bg-2); bord
   box-shadow: var(--shadow-lg); font: 12.5px/1.6 var(--mono);
 }
 .demo .term { height: 250px; font-size: 11.5px; }
-@media (max-width: 899px) { .demo-stage { gap: 1rem; } .demo .phone { height: 560px; } }
-@media (min-width: 900px) { .demo .term { height: 560px; font-size: 13px; } }
+/* a phone: terminal and phone fit on one screen together */
+@media (max-width: 899px) { .demo-stage { gap: 1rem; } .demo .term { height: 180px; } .demo .phone { width: 250px; height: 480px; } }
+@media (min-width: 900px) { .demo .term { height: 480px; font-size: 13px; } }
 .term-bar { flex: none; display: flex; align-items: center; gap: .75rem; height: 38px; padding: 0 14px; background: #ffffff07; border-bottom: 1px solid #ffffff0f; }
 .dots {
   flex: none; width: 52px; height: 12px;
@@ -196,6 +199,7 @@ code { font-family: var(--mono); font-size: .86em; background: var(--bg-2); bord
 /* the /demo page: one terminal look per agent CLI */
 .clis { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin: 0 0 2rem; }
 .clis [aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+@media (max-width: 719px) { .clis { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; scrollbar-width: none; margin-inline: -1rem; padding-inline: 1rem; } .clis > * { flex: none; } }
 .cli-claude { --t-accent: #e8875f; }
 .cli-codex { --t-accent: #e8e8ee; }
 .cli-gemini { --t-accent: #8ab4f8; }
@@ -298,11 +302,23 @@ h3 { letter-spacing: -.012em; }
 .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; }
 @media (min-width: 1000px) { .chips { justify-content: flex-start; } }
 .chips li { padding: .3rem .75rem; font-size: .82rem; font-weight: 550; color: var(--fg-2); background: var(--surface); border: 1px solid var(--line-2); border-radius: 999px; }
-.ctls { display: grid; gap: 1.25rem; max-width: 64rem; margin: 0 auto; text-align: left; }
-@media (min-width: 720px) { .ctls { grid-template-columns: 1fr 1fr; align-items: start; } }
-.ctl { display: grid; gap: .45rem; }
-.ctl-type { justify-self: start; font-size: .78rem; color: var(--muted); }
-.ctl .countdown, .ctl .mood { margin: 0; }
+.ctls { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.25rem; max-width: 64rem; margin: 0 auto; text-align: left; }
+@media (min-width: 720px) { .ctls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ctl { position: relative; display: grid; }
+.ctl-wide { grid-column: 1 / -1; }
+.ctl-type { position: absolute; top: .9rem; right: 1rem; font-size: .72rem; color: var(--faint); background: none; border: 0; padding: 0; pointer-events: none; }
+.ctls > .ctl:not(:first-child) :is(.dice, details.comment) { display: none; } /* shown once, on the first card */
+.ctl-form { display: grid; gap: 2rem; }
+.ctl-form > * { min-width: 0; } /* the mood chips scroll instead of widening the card */
+@media (min-width: 720px) { .ctl-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ctl-form h3 { margin: 0 0 .25rem; }
+.ctl-form .fine { margin: 0 0 1rem; }
+.mood-chips { justify-content: flex-start; margin: 0 0 1rem; }
+.mood-chips .btn { font-family: var(--mono); font-size: .8rem; }
+.mood-demo { display: grid; gap: .75rem; }
+.mood-demo .mood { margin: 0; }
+.more { text-align: center; margin: 2rem 0 0; }
+.more a { display: inline-flex; align-items: center; gap: .35em; font-weight: 600; }
 .showcase { display: grid; gap: 1.5rem; justify-items: center; }
 @media (min-width: 720px) { .showcase { grid-template-columns: auto minmax(0, 1fr); align-items: center; } }
 .showcase .term { max-height: 440px; }
@@ -352,7 +368,7 @@ h3 { letter-spacing: -.012em; }
 .e2e { display: inline-flex; align-items: center; gap: .35em; padding: .35em .75em .35em .6em; font-size: .76em; font-weight: 620; color: var(--ok); background: var(--ok-soft); border-radius: 999px; white-space: nowrap; }
 .sess { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: .5em; font-size: .82em; color: var(--muted); }
 .sess b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 620; color: var(--fg); }
-.sess-time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sess-time { font-size: .82em; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (max-width: 34em) { .topbar:has(.sess b:not(:empty)) .e2e span { display: none; } } /* a phone: the name gets the room */
 .e2e .icon { width: 1.1em; height: 1.1em; stroke-width: 2.2; }
 .shell-main { flex: 1; width: 100%; max-width: 38em; margin: 0 auto; padding: .25em 1em 2em; }
