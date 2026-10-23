@@ -22,6 +22,11 @@
         }
       ]
     },
+    "day": { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$" },
+    "minute": {
+      "type": "string",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d$"
+    },
     "other": {
       "type": "boolean",
       "description": "Adds an \"Other\" option with a text box. A write-in comes back as a plain value; a default matching no option pre-fills the box."
@@ -31,7 +36,7 @@
       "required": ["id", "type", "label"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
-        "type": { "enum": ["confirm", "single", "multi", "review", "rank", "text", "number"] },
+        "type": { "enum": ["confirm", "single", "multi", "review", "rank", "text", "number", "date"] },
         "label": { "type": "string", "minLength": 1, "maxLength": 500 },
         "md": { "$ref": "#/$defs/markdown", "description": "Per-question markdown context." },
         "required": { "type": "boolean" }
@@ -152,6 +157,39 @@
             },
             "additionalProperties": false
           }
+        },
+        {
+          "if": { "properties": { "type": { "const": "date" } } },
+          "then": {
+            "description": "A date from the native picker. min/max/default have no offset and are read as the user's local time. Answered as YYYY-MM-DD, or YYYY-MM-DDTHH:mm±hh:mm with time: true.",
+            "properties": {
+              "id": true,
+              "type": true,
+              "label": true,
+              "md": true,
+              "required": true,
+              "time": { "type": "boolean" },
+              "default": true,
+              "min": true,
+              "max": true
+            },
+            "additionalProperties": false,
+            "if": { "required": ["time"], "properties": { "time": { "const": true } } },
+            "then": {
+              "properties": {
+                "default": { "$ref": "#/$defs/minute" },
+                "min": { "$ref": "#/$defs/minute" },
+                "max": { "$ref": "#/$defs/minute" }
+              }
+            },
+            "else": {
+              "properties": {
+                "default": { "$ref": "#/$defs/day" },
+                "min": { "$ref": "#/$defs/day" },
+                "max": { "$ref": "#/$defs/day" }
+              }
+            }
+          }
         }
       ]
     },
@@ -204,7 +242,7 @@
           "type": "object",
           "propertyNames": { "$ref": "#/$defs/id" },
           "additionalProperties": {
-            "description": "confirm: boolean, single/text: string, multi/rank: string[], number: number, review: {value: boolean}.",
+            "description": "confirm: boolean, single/text: string, multi/rank: string[], number: number, date: string, review: {value: boolean}.",
             "type": ["boolean", "string", "number", "array", "object"],
             "items": { "type": "string" },
             "additionalProperties": { "type": "boolean" }

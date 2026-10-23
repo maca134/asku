@@ -20,7 +20,7 @@ It saves the skill and one script for your OS. Next time it needs a decision, it
 - **End-to-end encrypted.** Keys are made on the agent's machine and in your browser. The relay only stores ciphertext, and deletes it when the session ends.
 - **Nothing to run on the agent side** beyond one script: `ask.sh` (bash, curl, OpenSSL) or `ask.ps1` (PowerShell). No MCP server, no daemon.
 - **Any agent** that can run shell commands: Claude Code, Codex, Cursor, Gemini CLI.
-- **Rich answers.** Yes/no, pick one, pick several, text and numbers, with markdown context and a comment box on every question.
+- **Rich answers.** Yes/no, pick one, pick several, text, numbers and dates, with markdown context and a comment box on every question.
 - **Open source** (MIT), small enough to audit, and you can [run your own relay](#deploy).
 
 ## Protocol
@@ -84,7 +84,7 @@ Verify TAG in constant time BEFORE decrypt.
 `{ "v":1, "seq":n, "dir":"q"|"a", "iv":"…", "ct":"…", "tag":"…" }`
 
 ### v1 controls
-`confirm`, `single`, `multi`, `review`, `rank`, `text`, `number`, plus markdown context (DOMPurify) and an implicit per-question comment field.
+`confirm`, `single`, `multi`, `review`, `rank`, `text`, `number`, `date`, plus markdown context (DOMPurify) and an implicit per-question comment field.
 Answer shape: `{ "answers": { "<id>": value }, "skipped": [], "comments": { "<id>": "" }, "note": "" }`.
 Unanswered optional questions go in `skipped`. Questions the user hands back with "Let the agent decide" go in `delegated`. If a question fails schema validation in the browser, the agent gets back `{ …, "error": "invalid question: …" }` instead.
 - `deadline` (seconds) on a form: the page counts down and locks the batch at zero. The client stops waiting then and prints `{ "seqs": […], "answers": {}, "skipped": [<its ids>], …, "timeout": true }`. When the client queues the batch it adds `sent` (unix seconds), so the page counts from when the agent asked, not from when the page opened. Queue numbers can have gaps after a timeout; the client numbers messages on the wire from the last one it sent.

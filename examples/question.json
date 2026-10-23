@@ -26,6 +26,7 @@
     },
     { "id": "order", "type": "rank", "label": "Ship order", "options": ["api", "web", "mobile"] },
     { "id": "why", "type": "text", "label": "Release notes", "multiline": true, "placeholder": "Optional" },
-    { "id": "pct", "type": "number", "label": "Canary %", "min": 0, "max": 100, "step": 5, "default": 10 }
+    { "id": "pct", "type": "number", "label": "Canary %", "min": 0, "max": 100, "step": 5, "default": 10 },
+    { "id": "when", "type": "date", "label": "Deploy window", "time": true, "min": "2026-10-24T09:00" }
   ]
 }
