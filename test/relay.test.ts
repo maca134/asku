@@ -104,6 +104,7 @@ test("serves the page and hashed assets", async () => {
   mkdirSync(`${dist}/assets`);
   writeFileSync(`${dist}/index.html`, "<!doctype html>");
   writeFileSync(`${dist}/assets/app-abc123.js`, "1");
+  writeFileSync(`${dist}/skill.md`, "# asku");
   const s = relay({ dist });
   const at = (p: string) => fetch(s.server.url.href.replace(/\/$/, "") + p);
   try {
@@ -117,7 +118,10 @@ test("serves the page and hashed assets", async () => {
     const js = await at("/assets/app-abc123.js");
     expect(js.headers.get("cache-control")).toContain("immutable");
     expect(js.headers.get("content-security-policy")).toContain("default-src 'none'");
-    for (const p of ["/assets/nope.js", "/assets/..%2Findex.html", "/a/short", "/index.html"]) expect((await at(p)).status).toBe(404);
+    const md = await at("/skill.md");
+    expect(await md.text()).toBe("# asku");
+    expect(md.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    for (const p of ["/ask.sh", "/assets/nope.js", "/assets/..%2Findex.html", "/a/short", "/index.html"]) expect((await at(p)).status).toBe(404);
   } finally {
     s.stop();
   }

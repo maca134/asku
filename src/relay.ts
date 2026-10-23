@@ -149,10 +149,10 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
   }
 
   // Built frontend (bun run build). Paths are matched by strict regexes before reaching here.
-  async function file(path: string, cache: string) {
+  async function file(path: string, cache: string, type?: string) {
     const f = Bun.file(`${dist}/${path}`);
     if (!(await f.exists())) return fail(404, "not found");
-    return new Response(f, { headers: { "cache-control": cache } });
+    return new Response(f, { headers: { "cache-control": cache, ...(type && { "content-type": type }) } });
   }
 
   const authed = (req: Request, key: string | null) =>
@@ -164,6 +164,9 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
     if (m === "GET" && (url.pathname === "/" || /^\/[aj]\/[\w-]{22}$/.test(url.pathname))) return file("index.html", "no-store");
     const asset = url.pathname.match(/^\/assets\/([\w-]+\.(?:js|css))$/);
     if (m === "GET" && asset) return file(`assets/${asset[1]}`, "public, max-age=31536000, immutable");
+    // The skill: SKILL.md, the agent scripts and the schema, as plain text so curl and browsers both just show them.
+    if (m === "GET" && /^\/(skill\.md|ask\.sh|ask\.ps1|schema\.json)$/.test(url.pathname))
+      return file(url.pathname.slice(1), "no-cache", url.pathname.endsWith(".json") ? "application/json" : "text/plain; charset=utf-8");
 
     const [, root, sid, sub, extra] = url.pathname.split("/");
     if (root !== "s" || extra !== undefined) return fail(404, "not found");

@@ -28,4 +28,6 @@ const tags = await Promise.all(out.outputs.map(async (o) => {
 }));
 const html = (await Bun.file("web/index.html").text()).replace("<!--assets-->", tags.join("\n"));
 await Bun.write("dist/index.html", html);
+for (const [from, to] of [["skill/SKILL.md", "skill.md"], ["skill/ask.sh", "ask.sh"], ["skill/ask.ps1", "ask.ps1"], ["schema.json", "schema.json"]])
+  await Bun.write(`dist/${to}`, Bun.file(from));
 console.log(out.outputs.map((o) => `${o.path} ${o.size}`).join("\n"));
