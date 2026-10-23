@@ -107,6 +107,15 @@ export class OpenForm {
     if (!replayed) this.flagNew(elements[0], batch.questions.length);
   }
 
+  // Answered without this page, from a notification's buttons.
+  answeredElsewhere(seq: number) {
+    const part = this.parts.find((part) => part.seq === seq);
+    if (!part || this.sending) return;
+    if (this.parts.length > 1) return this.markSent([part]);
+    this.close(feedEvent("check", `Answered: ${this.names.join(" · ")}`));
+    this.done();
+  }
+
   private flagNew(element: Element, count: number) {
     this.unseen += count;
     this.firstUnseen ??= element;
