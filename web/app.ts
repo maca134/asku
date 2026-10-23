@@ -15,7 +15,8 @@ type Item = {
   placeholder?: string; multiline?: boolean; maxLength?: number;
 };
 type Question = { title?: string; md?: string; questions: Item[] };
-type Answer = { answers: Record<string, unknown>; skipped: string[]; comments: Record<string, string>; note: string; error?: string };
+// seqs: the batches an answer covers, always the first key (ask.sh matches it at the start); declined: the user chose not to answer
+type Answer = { seqs?: number[]; answers: Record<string, unknown>; skipped: string[]; comments: Record<string, string>; note: string; declined?: true; error?: string };
 // pubA is unset while a session this browser created waits for its agent; pubB, T and note are only kept until then.
 type State = { priv: CryptoKey; key: string; answered: number[]; pubA?: string; pubB?: string; T?: string; note?: string };
 type Kid = Node | string | null | undefined | false;
@@ -42,6 +43,7 @@ const ICONS: Record<string, string> = {
   copy: '<rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2.5"/><path d="M15.5 8.5V6A2 2 0 0 0 13.5 4H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5"/>',
   arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
+  up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
   terminal: '<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15H17"/>',
   phone: '<rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
   link: '<path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/>',
@@ -84,7 +86,8 @@ function md(src: string, extra = "") {
 // ---- app pages: a slim top bar and one centred column, built for phones
 function shell(kids: Kid[], tag: "main" | "div" = "main") {
   return h("div", { className: "shell" },
-    h("header", { className: "topbar" }, logo("/"), h("span", { className: "e2e" }, icon("lock"), "End-to-end encrypted")),
+    // no home link on an answer page: one stray tap would lose a half-filled form
+    h("header", { className: "topbar" }, logo(location.pathname.startsWith("/a/") ? undefined : "/"), h("span", { className: "e2e" }, icon("lock"), "End-to-end encrypted")),
     h(tag, { className: "shell-main" }, ...kids));
 }
 
@@ -243,16 +246,20 @@ function buildForm(q: Question) {
     const els = [sec, ...fs.map((f) => f.el)].filter((e) => e !== null);
     tail.before(...els);
     refresh();
-    return els[0];
+    return { els, fields: fs };
+  };
+  const remove = (fs: typeof fields) => {
+    for (const x of fs) { fields.splice(fields.indexOf(x), 1); x.el.remove(); }
+    refresh();
   };
 
   let tried = false;
-  // mark: flag problems on the fields (after the first submit, flags then follow every edit)
-  const collect = (mark = true) => {
+  // mark: flag problems on the fields (after the first submit, flags then follow every edit); only: just these fields
+  const collect = (mark = true, only = fields) => {
     tried ||= mark;
     const a: Answer = { answers: {}, skipped: [], comments: {}, note: note.value.trim() };
     const problems: string[] = [];
-    for (const f of fields) {
+    for (const f of only) {
       const v = f.value();
       const bad = v === undefined ? (f.it.required ? "required" : null) : f.check();
       f.el.classList.toggle("invalid", tried && !!bad);
@@ -273,72 +280,131 @@ function buildForm(q: Question) {
   form.addEventListener("input", refresh);
   form.addEventListener("change", refresh);
   append(q, false);
-  return { form, fields, note, err, btn, label, collect, append };
+  return { form, fields, note, tail, err, btn, label, collect, append, remove };
 }
 
 // ---- session
-// One answer covers every batch in `seqs`: it goes under the newest one, and the agent reads it as answering all of them.
+// One answer can cover several batches: it goes under the newest, and says which in its `seqs`.
 async function send(sid: string, keys: Keys, st: State, seqs: number[], a: Answer | { note: string }) {
   const res = await post(`/s/${sid}/a`, await seal(keys, sid, "a", Math.max(...seqs), JSON.stringify(a)), st.key);
-  if (res.status !== 204 && res.status !== 409) throw new Error(`relay said ${res.status}`); // 409: already answered
+  // duplicate: a retry of an answer the relay already has
+  if (res.status !== 204 && !(res.status === 409 && (await res.json().catch(() => ({}))).error === "duplicate")) throw new Error(`relay said ${res.status}`);
   st.answered.push(...seqs);
   await save(sid, st);
 }
 
-const sentState = () => stateEl("done", "Answers sent", "Encrypted on this device and delivered to your agent.", live("Waiting for the agent's next question…"));
+const sentState = () => stateEl("done", "Answers sent", "Encrypted on this device and delivered to your agent. Keep this tab open for follow-up questions.", live("Waiting for the agent's next question…"));
+const smooth = (): ScrollBehavior => (matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
 
 type Batch = [seq: number, q: Question];
-type Open = { f: ReturnType<typeof buildForm>; seqs: number[]; sending: boolean; add: (b: Batch) => void };
+type Fields = ReturnType<typeof buildForm>["fields"];
+type Part = { seq: number; fields: Fields; foot: HTMLElement };
+type Open = { f: ReturnType<typeof buildForm>; sending: boolean; add: (b: Batch) => void };
 
-// Shows a form for one or more batches. Batches added later go under it, with a chip pointing at them.
+// Shows a form for one or more batches. Later batches go under it, with a chip pointing at them; with more than one
+// open, each batch can be sent on its own, and the main button sends the rest.
 function render(sid: string, keys: Keys, st: State, batches: Batch[], done: () => void): Open {
   const [[seq, q], ...rest] = batches;
   const f = buildForm(q);
   const born = Date.now();
+  const parts: Part[] = [];
   let unseen = 0, first: Element | undefined;
-  const chip = h("button", { type: "button", className: "new-chip", onclick: () => first?.scrollIntoView({ behavior: "smooth", block: "start" }) });
+  const said = h("p", { className: "sr-only", ariaLive: "polite" });
+  const chip = h("button", { type: "button", className: "new-chip", onclick: () => first?.scrollIntoView({ behavior: smooth(), block: "start" }) });
   const seen = new IntersectionObserver((es) => {
     if (!es.some((x) => x.isIntersecting)) return;
     chip.remove(); unseen = 0; first = undefined; seen.disconnect();
   });
+  const decline = h("button", { type: "button", className: "btn btn-secondary btn-sm" }, "Decline, send only the note");
+  decline.onclick = () => submit(parts, true);
+  f.tail.after(h("div", { className: "decline" }, decline));
+  f.form.append(said);
+
+  const part = (s: number, fs: Fields) => {
+    const btn = h("button", { type: "button", className: "btn btn-secondary btn-sm" }, `Send ${fs.length === 1 ? "this answer" : `these ${fs.length} answers`}`);
+    const p: Part = { seq: s, fields: fs, foot: h("div", { className: "batch-foot" }, btn) };
+    btn.onclick = () => submit([p]);
+    fs[fs.length - 1].el.after(p.foot);
+    parts.push(p);
+    f.form.classList.toggle("multi", parts.length > 1);
+  };
+
+  const busy = (on: boolean) => {
+    o.sending = on;
+    f.form.querySelectorAll<HTMLButtonElement>(".btn").forEach((b) => (b.disabled = on));
+    f.label.textContent = on ? "Sending…" : "Send answers";
+  };
+  const submit = async (ps: Part[], declined = false) => {
+    if (o.sending) return;
+    const all = ps.length === parts.length;
+    const fields = ps.flatMap((p) => p.fields);
+    let a: Answer;
+    if (declined) {
+      if (!f.note.value.trim()) {
+        f.err.textContent = "Write a note first, so the agent knows why you're not answering.";
+        return f.note.focus();
+      }
+      a = { answers: {}, skipped: fields.map((x) => x.it.id), comments: {}, note: f.note.value.trim(), declined: true };
+    } else {
+      const r = f.collect(true, fields);
+      if (r.problems.length) {
+        f.form.querySelector(".invalid")?.scrollIntoView({ behavior: smooth(), block: "start" });
+        return;
+      }
+      if (all && unseen) { // don't send questions the user hasn't seen as "skipped"
+        f.err.textContent = "New questions just arrived. Have a look, then send again.";
+        first?.scrollIntoView({ behavior: smooth(), block: "start" });
+        unseen = 0;
+        return;
+      }
+      a = all ? r.a : { ...r.a, note: "" };
+    }
+    busy(true);
+    try {
+      const seqs = ps.map((p) => p.seq);
+      await send(sid, keys, st, seqs, { seqs, ...a });
+      if (all) {
+        seen.disconnect();
+        app.replaceChildren(shell([sentState()]));
+      } else {
+        for (const p of ps) {
+          p.foot.replaceWith(h("p", { className: "batch-sent" }, icon("check"), `Sent ${p.fields.length === 1 ? "1 answer" : `${p.fields.length} answers`}`));
+          f.remove(p.fields);
+          parts.splice(parts.indexOf(p), 1);
+        }
+        f.form.classList.toggle("multi", parts.length > 1);
+        f.err.textContent = "";
+        busy(false);
+      }
+    } catch (x) {
+      busy(false);
+      const m = (x as Error).message;
+      f.err.textContent = m === "Failed to fetch" ? "Couldn't reach the relay. Check your connection and send again." : `Not sent: ${m}. Try again.`;
+    }
+    done();
+  };
+
   const o: Open = {
-    f, seqs: [seq], sending: false,
+    f, sending: false,
     add([s, b]) {
-      o.seqs.push(s);
-      const el = f.append(b);
-      if (Date.now() - born < 1000 || !el) return; // replayed after a reload, not new
+      const r = f.append(b);
+      part(s, r.fields);
+      if (Date.now() - born < 1000) return; // replayed after a reload, not new
+      const el = r.els[0];
       unseen += b.questions.length;
       first ??= el;
-      chip.replaceChildren(icon("down"), `${unseen} new question${unseen === 1 ? "" : "s"} below`);
+      const above = el.getBoundingClientRect().bottom < 0;
+      const text = `${unseen} new question${unseen === 1 ? "" : "s"} ${above ? "above" : "below"}`;
+      chip.replaceChildren(icon(above ? "up" : "down"), text);
+      said.textContent = text;
       if (!chip.isConnected) f.form.append(chip);
       seen.observe(el);
       if (document.hidden) document.title = "● asku: new questions";
     },
   };
+  part(seq, f.fields.slice());
   rest.forEach(o.add);
-  f.form.onsubmit = async (e) => {
-    e.preventDefault();
-    const { a, problems } = f.collect();
-    if (problems.length) {
-      f.form.querySelector(".invalid")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
-    o.sending = true;
-    f.btn.disabled = true;
-    f.label.textContent = "Sending…";
-    try {
-      await send(sid, keys, st, o.seqs, a);
-      seen.disconnect();
-      app.replaceChildren(shell([sentState()]));
-      done();
-    } catch (x) {
-      o.sending = false;
-      f.err.textContent = `Not sent: ${(x as Error).message}. Try again.`;
-      f.btn.disabled = false;
-      f.label.textContent = "Send answers";
-      done();
-    }
-  };
+  f.form.onsubmit = (e) => { e.preventDefault(); submit(parts); };
   app.replaceChildren(shell([f.form]));
   scrollTo(0, 0);
   if (document.hidden) document.title = "● asku: question waiting";
@@ -531,12 +597,15 @@ function listen(sid: string, keys: Keys, st: State) {
   status("wait", "Connected", "Waiting for the agent's question. This page updates by itself, keep it open.");
   const es = new EventSource(`/s/${sid}/q`);
   let cur: Open | null = null;
-  let later: Batch[] = []; // arrived while an answer was being sent: they open the next form
-  const done = () => {
-    if (cur?.sending === false) { later.forEach(cur.add); later = []; return; } // the send failed, the form is still open
-    cur = null;
-    if (later.length) { const b = later; later = []; cur = render(sid, keys, st, b, done); }
-  };
+  let later: Batch[] = []; // arrived while an answer was being sent: placed once it's done
+  let chain: Promise<unknown> = Promise.resolve(); // decrypting and placing are async: keep batches in order
+  const queue = (fn: () => Promise<unknown>) => { chain = chain.then(fn).catch(console.error); };
+  const done = () => queue(async () => {
+    if (cur?.sending) cur = null; // everything was sent; otherwise the form is still open
+    const b = later;
+    later = [];
+    for (const [s, q] of b) await place(s, q);
+  });
   // Why a batch can't join the open form. The agent client checks the same, this only guards the merged answer.
   const clash = (f: Open["f"], q: Question) => {
     const have = new Set(f.fields.map((x) => x.it.id));
@@ -553,21 +622,23 @@ function listen(sid: string, keys: Keys, st: State) {
       if (cur) { cur.f.err.textContent = msg; return; } // keep what the user has typed
       return status("error", "A message failed verification", "It was ignored. If this repeats, ask the agent for a new link.");
     }
-    const target = cur && !cur.sending ? cur : null;
+    await place(seq, q);
+  };
+  const place = async (seq: number, q: Question) => {
+    if (cur?.sending) return void later.push([seq, q]);
+    const target = cur;
     const problem = !validQuestion(q) ? (validQuestion as any).errors?.map((x: any) => `${x.instancePath || "/"} ${x.message}`).join("; ") ?? "invalid"
       : target ? clash(target.f, q) : null;
     if (problem) {
       // the batch is dropped; an open form stays as it is
-      await send(sid, keys, st, [seq], { answers: {}, skipped: [], comments: {}, note: "", error: `invalid question: ${problem}`.slice(0, 2000) }).catch(() => {});
+      await send(sid, keys, st, [seq], { seqs: [seq], answers: {}, skipped: [], comments: {}, note: "", error: `invalid question: ${problem}`.slice(0, 2000) }).catch(() => {});
       if (cur) return;
       return status("error", "This question can't be shown", "The agent sent a form this page doesn't understand. It has been told; wait for a corrected one.", live("Waiting for the agent…"));
     }
-    if (cur?.sending) later.push([seq, q]);
-    else if (cur) cur.add([seq, q]);
+    if (cur) cur.add([seq, q]);
     else cur = render(sid, keys, st, [[seq, q]], done);
   };
-  let chain = Promise.resolve(); // decrypt is async: keep batches in order
-  es.addEventListener("q", (e) => { chain = chain.then(() => onQ(Number(e.lastEventId), e.data)).catch(console.error); });
+  es.addEventListener("q", (e) => queue(() => onQ(Number(e.lastEventId), e.data)));
   es.addEventListener("close", () => {
     es.close();
     drop(sid);

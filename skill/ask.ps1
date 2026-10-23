@@ -1,7 +1,7 @@
 # asku agent client. PowerShell 5.1 + .NET Framework only. Keep this file ASCII: PS 5.1 reads BOM-less files as ANSI.
 param([string]$Command, [string]$File)
 $ErrorActionPreference = 'Stop'
-$Version = '1.1.0' # keep in step with ask.sh
+$Version = '1.2.0' # keep in step with ask.sh
 
 function ConvertTo-AskuHex([byte[]]$Bytes) { [BitConverter]::ToString($Bytes).Replace('-', '').ToLower() }
 
@@ -97,6 +97,9 @@ $urlFile = Join-Path $S 'url' # a joined session lives on its link's relay
 $Base = if (Test-Path $urlFile) { [IO.File]::ReadAllText($urlFile).Trim() } elseif ($env:ASKU_URL) { $env:ASKU_URL } else { 'https://asku.dev' }
 $WaitSec = if ($env:ASKU_WAIT) { [int]$env:ASKU_WAIT } else { 500 } # no new poll after this; agent tool timeouts are ~600s
 $Self = "powershell -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" # how messages tell the agent to run us again
+if ($Command -ne 'close' -and (Test-Path (Join-Path $S 'sid')) -and -not (Test-Path (Join-Path $S 'priv'))) { # ask.sh keeps an OpenSSL key we can't read
+    [Console]::Error.WriteLine("asku: session '$(Split-Path $S -Leaf)' belongs to ask.sh; use it, or set ASKU_SESSION"); exit 1
+}
 
 function Fail([string]$Msg) { [Console]::Error.WriteLine("asku: $Msg"); exit 1 }
 function Pending([string]$Msg) { [Console]::Out.Write("PENDING`n$Msg`nRun again to keep waiting: $Self wait`n"); exit 2 }
@@ -246,15 +249,14 @@ function Send-Asku([switch]$NoWait) {
             $r = Invoke-AskuRequest POST "/s/$sid/q" $envelope
             if (-not $r) { if ((Get-Date) -ge $deadline) { Pending "Could not reach the relay at $Base; questions are still queued." }; Start-Sleep 2 }
         } until ($r)
-        if ($r.Code -ne 204 -and $r.Code -ne 409) { Fail "send failed ($($r.Code)): $($r.Body)" } # 409: an earlier run already sent it
+        if ($r.Code -ne 204 -and -not ($r.Code -eq 409 -and $r.Body -match 'duplicate')) { Fail "send failed ($($r.Code)): $($r.Body)" } # duplicate: an earlier run sent it
         Set-State 'seq' $seq
         Move-Item -Force $f (Join-Path $S "o$seq.json")
     }
     @{ Keys = $keys; Sid = $sid; Deadline = $deadline }
 }
 
-# Waits for the next answer to an open batch and prints it. One submit answers every batch up to its seq;
-# an {error} answers just its own (the page dropped that batch and kept the rest open).
+# Waits for the next answer to an open batch and prints it. One answer can cover several batches (its seqs).
 function Wait-Asku {
     $c = Send-Asku
     if (-not (Get-Batches 'o').Count) { Fail "no question pending; run: $Self ask <file>" }
@@ -271,8 +273,10 @@ function Wait-Asku {
                 if (-not $env) { Start-Sleep 2; break } # all already handled; keep the cursor, a lower seq can still arrive
                 $seq = [int]$env.seq
                 try { $text = [Text.Encoding]::UTF8.GetString((Unprotect-AskuMessage $c.Keys $c.Sid 'a' $seq $env)) } catch { Fail 'answer failed verification' }
-                $isError = $(try { [bool]($text | ConvertFrom-Json).error } catch { $false })
-                foreach ($n in Get-Batches 'o') { if ($n -eq $seq -or ($n -lt $seq -and -not $isError)) { Remove-Item (Join-Path $S "o$n.json") } }
+                # seqs (inside the encrypted answer) names the batches it covers; older pages: an error covers its own, an answer all up to it
+                $j = $(try { $text | ConvertFrom-Json } catch { $null })
+                $covered = if ($j -and $j.seqs) { @($j.seqs) } elseif ($j -and $j.error) { @($seq) } else { @(Get-Batches 'o') }
+                foreach ($n in $covered) { if ([int]$n -le $seq) { Remove-Item -ErrorAction SilentlyContinue (Join-Path $S "o$([int]$n).json") } }
                 [Console]::Out.Write($text + "`n")
                 $left = (Get-Batches 'o').Count
                 if ($left) { [Console]::Error.WriteLine("asku: $left batch(es) still pending; run: $Self wait") }

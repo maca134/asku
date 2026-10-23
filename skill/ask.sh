@@ -3,7 +3,7 @@
 # ponytail: LibreSSL (macOS /usr/bin/openssl) lacks `dgst -macopt hexkey`; hand-rolled HMAC if macOS agents matter.
 set -euo pipefail
 
-VERSION=1.1.0 # keep in step with ask.ps1
+VERSION=1.2.0 # keep in step with ask.ps1
 
 SPKI_P256=3059301306072a8648ce3d020106082a8648ce3d030107034200
 
@@ -69,6 +69,9 @@ WAIT=${ASKU_WAIT:-500} # no new poll after this many seconds; agent tool timeout
 AUTH=$S/auth
 command -v cygpath >/dev/null && AUTH=$(cygpath -m "$AUTH") # native curl.exe on Git Bash can't read /c/... paths
 umask 077
+command -v openssl >/dev/null && command -v curl >/dev/null || { echo "asku: needs openssl and curl on PATH" >&2; exit 1; }
+# a session started by ask.ps1 has a .NET key we can't read
+[ "${1:-}" = close ] || [ ! -f "$S/sid" ] || [ -f "$S/a.pem" ] || { echo "asku: session '${ASKU_SESSION:-default}' belongs to ask.ps1; use it, or set ASKU_SESSION" >&2; exit 1; }
 
 die() { echo "asku: $*" >&2; exit 1; }
 pending() { printf 'PENDING\n%s\nRun again to keep waiting: %s wait\n' "$1" "$0"; exit 2; }
@@ -136,9 +139,12 @@ ids() { grep -o '"id"[[:space:]]*:[[:space:]]*"[A-Za-z0-9_-]*"' "$1" | sed 's/.*
 
 # add <file | ->: queues a batch onto the open form. The 50-question limit and unique ids span the whole form.
 add() {
-  local f=${1:--} new open dup k n seq
+  local f=${1:-} new open dup k n seq
+  [ -n "$f" ] || die "$CMD needs a questions.json file, or - for stdin"
   if [ "$f" = - ]; then TMPQ=$(mktemp); trap 'rm -f "$TMPQ"' EXIT; cat > "$TMPQ"; f=$TMPQ; fi
   [ -f "$f" ] || die "$CMD needs a questions.json file"
+  # ponytail: a sanity check, not a parser; the page validates against the schema and answers with an error
+  [[ $(tr -d ' \t\r\n' < "$f") =~ ^\{.*\"questions\":\[.*\}$ ]] || die "$f doesn't look like a questions JSON object"
   new=$(ids "$f")
   # ponytail: counts batches the user may have just submitted (we can't know yet); a false refusal only costs a rename
   open=$(for k in q o; do for n in $(batches $k); do ids "$S/$k$n.json"; done; done)
@@ -184,17 +190,16 @@ send() {
       [ $SECONDS -lt $DEADLINE ] || pending "Could not reach the relay at $BASE; questions are still queued."
       sleep 2
     done
-    [ "$CODE" = 204 ] || [ "$CODE" = 409 ] || die "send failed ($CODE): $BODY" # 409: an earlier run already sent it
+    [ "$CODE" = 204 ] || [[ $CODE = 409 && $BODY == *duplicate* ]] || die "send failed ($CODE): $BODY" # duplicate: an earlier run sent it
     echo "$n" > "$S/seq"
     mv "$S/q$n.json" "$S/o$n.json"
   done
 }
 
-# Waits for the next answer to an open batch and prints it. One submit answers every batch up to its seq;
-# an error answers just its own (the page dropped that batch and kept the rest open).
+# Waits for the next answer to an open batch and prints it. One answer can cover several batches (its seqs).
 answer() {
   send
-  local sid after list nl e env seq text err n left
+  local sid after list nl e env seq text covered n left
   sid=$(state sid)
   [ -n "$(batches o)" ] || die "no question pending; run: $0 ask <file>"
   # From the oldest open batch, not a cursor: an error for batch 3 can land before the answer to batch 2.
@@ -212,10 +217,12 @@ answer() {
            [ -n "$env" ] || { sleep 2; continue; } # all already handled; keep the cursor, a lower seq can still arrive
            text=$(open "$(state K)" "$sid" a "$seq" "$(printf %s "$env" | jget iv)" "$(printf %s "$env" | jget ct)" \
              "$(printf %s "$env" | jget tag)") || die "answer failed verification"
-           err=; [[ $text != *'"error":"invalid question'* ]] || err=1 # only the page writes that, and only as a key
-           for n in $(batches o); do
-             if [ "$n" = "$seq" ] || { [ -z "$err" ] && [ "$n" -lt "$seq" ]; }; then rm "$S/o$n.json"; fi
-           done
+           # seqs (first key, inside the encrypted answer) names the batches it covers; older pages: an error covers
+           # its own, an answer all up to it
+           if [[ $text =~ ^\{\"seqs\":\[([0-9,]*)\] ]]; then covered=${BASH_REMATCH[1]//,/ }
+           elif [[ $text == '{"answers":{},"skipped":[],"comments":{},"note":"","error":'* ]]; then covered=$seq
+           else covered=$(batches o); fi
+           for n in $covered; do [ "$n" -gt "$seq" ] || rm -f "$S/o$n.json"; done
            printf '%s\n' "$text"
            left=$(batches o | grep -c . || true)
            [ "$left" = 0 ] || echo "asku: $left batch(es) still pending; run: $0 wait" >&2
@@ -232,12 +239,12 @@ case "$CMD" in
   ask)
     [ -z "$(batches q)$(batches o)" ] || die "a form is open; run: $0 add <file> to append, or $0 wait"
     fresh=; [ -f "$S/sid" ] || fresh=1
-    add "${2:--}"
+    add "${2:-}"
     [ -z "$fresh" ] || pending "Give the user this link: $(link)"
     answer ;;
   add)
     fresh=; [ -f "$S/sid" ] || fresh=1
-    add "${2:--}"
+    add "${2:-}"
     [ -z "$fresh" ] || pending "Give the user this link: $(link)"
     send nowait || pending "Queued. The user has not opened the link yet. Give them: $(link)"
     pending "Sent. Add more with add, or run wait for the answer." ;;

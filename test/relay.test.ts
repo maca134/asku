@@ -40,9 +40,10 @@ test("full session: create, bind, q over SSE, a over long-poll, close", async ()
   // questions: agent key only, strictly sequential
   expect((await call("POST", `/s/${sid}/q`, env("q", 1))).status).toBe(401);
   expect((await call("POST", `/s/${sid}/q`, env("q", 1), bkey)).status).toBe(401);
-  expect((await call("POST", `/s/${sid}/q`, env("q", 2), key)).status).toBe(409);
+  expect(await (await call("POST", `/s/${sid}/q`, env("q", 2), key)).json()).toEqual({ error: "bad seq" });
   expect((await call("POST", `/s/${sid}/q`, env("q", 1), key)).status).toBe(204);
-  expect((await call("POST", `/s/${sid}/q`, env("q", 1), key)).status).toBe(409);
+  const again = await call("POST", `/s/${sid}/q`, env("q", 1), key);
+  expect([again.status, await again.json()]).toEqual([409, { error: "duplicate" }]); // a retry counts as sent
   expect((await call("POST", `/s/${sid}/q`, { ...env("q", 2), dir: "a" }, key)).status).toBe(400);
   expect((await call("POST", `/s/${sid}/q`, { ...env("q", 2), iv: "AAAA" }, key)).status).toBe(400);
   expect((await call("POST", `/s/${sid}/q`, { ...env("q", 2), x: 1 }, key)).status).toBe(400);
@@ -62,9 +63,9 @@ test("full session: create, bind, q over SSE, a over long-poll, close", async ()
   expect((await call("GET", `/s/${sid}/a?after=0`)).status).toBe(204);
   const answerPoll = call("GET", `/s/${sid}/a?after=0`);
   expect((await call("POST", `/s/${sid}/a`, env("a", 1), key)).status).toBe(401);
-  expect((await call("POST", `/s/${sid}/a`, env("a", 3), bkey)).status).toBe(409);
+  expect(await (await call("POST", `/s/${sid}/a`, env("a", 3), bkey)).json()).toEqual({ error: "bad seq" });
   expect((await call("POST", `/s/${sid}/a`, env("a", 1), bkey)).status).toBe(204);
-  expect((await call("POST", `/s/${sid}/a`, env("a", 1), bkey)).status).toBe(409);
+  expect(await (await call("POST", `/s/${sid}/a`, env("a", 1), bkey)).json()).toEqual({ error: "duplicate" });
   expect(await (await answerPoll).json()).toEqual([env("a", 1)]);
   expect((await call("POST", `/s/${sid}/a`, env("a", 2), bkey)).status).toBe(204);
   expect(await (await call("GET", `/s/${sid}/a?after=1`)).json()).toEqual([env("a", 2)]);

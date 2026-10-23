@@ -230,6 +230,8 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
         const env = envelope(await body(req), dir);
         if (!env) return fail(400, "bad envelope");
         const seq = JSON.parse(env).seq;
+        // "duplicate": that seq is already stored, so a retry can count as sent; "bad seq" is a real conflict
+        if (sql.has.get(sid, dir, seq)) return fail(409, "duplicate");
         // a seq 0 is the opening note of a browser-created session
         const seqOk = dir === "q" ? seq === (sql.last.get(sid, "q")?.n ?? 0) + 1
           : seq === 0 ? s.role === "browser" : sql.has.get(sid, "q", seq) !== null;
@@ -238,7 +240,7 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
         try {
           store(sid, dir, seq, env);
         } catch {
-          return fail(409, "bad seq"); // lost a race, or already answered
+          return fail(409, "duplicate"); // lost a race with an identical seq
         }
         notify(sid);
         return empty();

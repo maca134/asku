@@ -58,9 +58,10 @@ tool timeout of 10 minutes (Claude Code's Bash: `timeout: 600000`), or set `ASKU
 
 **Appending.** To send questions as you think of them, use `ask add` instead of `ask ask`: each batch goes to the bottom
 of the form the user has open and `add` returns at once (exit `2`; the first one prints the link). Run `ask wait` when you
-need the answers: one submit returns one answer covering every batch. Ids must be unique across the open form, and
-it holds 50 questions at most (`add` refuses otherwise). If `wait` says on stderr that batches are still pending,
-some of the form is still unanswered (for example the user submitted before a batch arrived): run `wait` again.
+need the answers: one answer can cover several batches, and the user can also send a batch on its own, so one `wait`
+may return only part of the form. Ids must be unique across the open form, and it holds 50 questions at most (`add`
+refuses otherwise). If `wait` says on stderr that batches are still pending, some of the form is still unanswered:
+run `wait` again for the rest.
 
 If the user pastes a link like `https://asku.dev/j/<id>#…`, run `ask join '<link>'` (quote it, it has a `#`) instead of step 1. It prints `{"note": "…"}`, the user's opening message (it can exit `2` first: then `ask wait`). If it says the session is in use, `ask close` or set `ASKU_SESSION`. Then continue from step 3.
 
@@ -98,6 +99,7 @@ Sessions are named by `ASKU_SESSION` (default `default`). Use a different name t
 
 ```json
 {
+  "seqs": [1],
   "answers": { "go": true, "env": "prod", "checks": ["lint", "test"], "pct": 25 },
   "skipped": ["why"],
   "comments": { "pct": "Keep it low on Fridays" },
@@ -109,6 +111,8 @@ Sessions are named by `ASKU_SESSION` (default `default`). Use a different name t
 - `skipped`: optional questions the user left blank.
 - `comments`: free text the user attached to a question. Read them, they often change the answer.
 - `note`: free text for the whole form.
+- `seqs`: which batches this answer covers (the client uses it; you can ignore it).
+- `declined: true`: the user chose not to answer and only wrote a `note` saying why. Read it before asking again.
 - `error`: present instead if the browser rejected your form as invalid. Fix it and `ask` again. For an appended batch, only that batch was dropped: fix it and `add` it again.
 
 ## Tips

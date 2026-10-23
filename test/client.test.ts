@@ -191,6 +191,18 @@ for (const c of clients) {
     await b.answer(6, ok({ f: "6" }));
     res = await run(["wait"]);
     expect(JSON.parse(res.out)).toEqual(ok({ f: "6" }));
+
+    // seqs says exactly which batches an answer covers: the user sends batch 9 on its own, batch 8 stays open
+    await run(["add", batch("b8", "h")]);
+    await run(["add", batch("b9", "i")]);
+    await b.answer(9, { seqs: [9], ...ok({ i: "9" }) });
+    res = await run(["wait"]);
+    expect(JSON.parse(res.out).answers).toEqual({ i: "9" });
+    expect(res.err).toContain("1 batch(es) still pending");
+    await b.answer(8, { seqs: [8], ...ok({}), skipped: ["h"], note: "no", declined: true });
+    res = await run(["wait"]);
+    expect(JSON.parse(res.out).declined).toBe(true);
+    expect(res.err).toBe("");
     expect((await run(["wait"])).code).toBe(1); // nothing open
 
     expect((await run(["close"])).code).toBe(0);
