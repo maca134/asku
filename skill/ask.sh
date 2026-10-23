@@ -54,3 +54,111 @@ fragment() { printf '%s.%s' "$(printf %s "$1" | unb64 | sha256)" "$2"; }
 
 # bindok <T hex> <pubB b64> <bind b64>: succeeds if bind == HMAC(T, pubB)
 bindok() { [ "$(printf %s "$2" | unb64 | hmac "$1" | hmac "$1")" = "$(printf %s "$3" | unb64 | hex | hmac "$1")" ]; }
+
+# ---- CLI ----------------------------------------------------------------------------------------
+[ "${BASH_SOURCE[0]}" = "$0" ] || return 0 # sourced (tests): functions only
+
+BASE=${ASKU_URL:-https://asku.dev}
+S=${ASKU_HOME:-$HOME/.asku}/${ASKU_SESSION:-default}
+WAIT=${ASKU_WAIT:-500} # no new poll after this many seconds; agent tool timeouts are ~600s
+AUTH=$S/auth
+command -v cygpath >/dev/null && AUTH=$(cygpath -m "$AUTH") # native curl.exe on Git Bash can't read /c/... paths
+umask 077
+
+die() { echo "asku: $*" >&2; exit 1; }
+pending() { printf 'PENDING\n%s\nRun again to keep waiting: %s wait\n' "$1" "$0"; exit 2; }
+jget() { sed -n "s/.*\"$1\":\"\{0,1\}\([^\",}]*\).*/\1/p"; } # flat JSON of base64 and ints only
+state() { cat "$S/$1" 2>/dev/null || echo "${2:-}"; }
+
+# req <method> <path> [json] -> CODE, BODY. Returns 1 only on network errors.
+req() {
+  local out args=(-sS --max-time 40 -X "$1" -w '\n%{http_code}' -H 'content-type: application/json')
+  [ -f "$S/auth" ] && args+=(-H "@$AUTH")
+  out=$(printf %s "${3:-}" | curl "${args[@]}" ${3:+--data-binary @-} "$BASE$2") || return 1
+  CODE=${out##*$'\n'}
+  BODY=${out%$'\n'*}
+}
+
+start() {
+  [ -f "$S/sid" ] && return
+  mkdir -p "$S"
+  openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out "$S/a.pem" 2>/dev/null
+  openssl pkey -in "$S/a.pem" -pubout -outform DER | tail -c 65 | b64 > "$S/pub"
+  openssl rand -hex 16 > "$S/T"
+  req POST /s "{\"pub\":\"$(state pub)\"}" || die "relay unreachable: $BASE"
+  [ "$CODE" = 201 ] || { rm -rf "$S"; die "create failed ($CODE): $BODY"; }
+  printf %s "$BODY" | jget sid > "$S/sid"
+  printf 'authorization: Bearer %s\n' "$(printf %s "$BODY" | jget key)" > "$S/auth"
+}
+
+link() { printf '%s/a/%s#%s' "$BASE" "$(state sid)" "$(fragment "$(state pub)" "$(state T)")"; }
+gone() { rm -rf "$S"; die "session expired or closed"; }
+
+# Waits for the bind, sends the pending question, waits for its answer and prints it.
+resume() {
+  [ -f "$S/sid" ] || die "no session; run: $0 ask <file>"
+  local sid seq pub deadline=$((SECONDS + WAIT))
+  sid=$(state sid)
+  while [ ! -f "$S/K" ]; do
+    [ $SECONDS -lt $deadline ] || pending "The user has not opened the link yet. Give them: $(link)"
+    req GET "/s/$sid/bind" || { sleep 2; continue; }
+    case $CODE in
+      200) pub=$(printf %s "$BODY" | jget pub)
+           if ! bindok "$(state T)" "$pub" "$(printf %s "$BODY" | jget mac)"; then
+             req DELETE "/s/$sid" || true; rm -rf "$S"
+             die "the link was opened without the right token; session closed, start a new one"
+           fi
+           derive "$S/a.pem" "$pub" > "$S/K" ;;
+      204) ;;
+      404) gone ;;
+      *) die "bind poll failed ($CODE): $BODY" ;;
+    esac
+  done
+  seq=$(state seq 0)
+  if [ -f "$S/pending" ]; then
+    seq=$((seq + 1))
+    BODY=$(seal "$(state K)" "$sid" q "$seq" < "$S/pending")
+    until req POST "/s/$sid/q" "$BODY"; do sleep 2; done
+    [ "$CODE" = 204 ] || [ "$CODE" = 409 ] || die "send failed ($CODE): $BODY" # 409: an earlier run already sent it
+    echo "$seq" > "$S/seq"
+    rm "$S/pending"
+  fi
+  [ "$seq" != "$(state answered 0)" ] || die "no question pending; run: $0 ask <file>"
+  while :; do
+    [ $SECONDS -lt $deadline ] || pending "The user has not answered yet."
+    req GET "/s/$sid/a?after=$((seq - 1))" || { sleep 2; continue; }
+    case $CODE in
+      200) open "$(state K)" "$sid" a "$seq" "$(printf %s "$BODY" | jget iv)" "$(printf %s "$BODY" | jget ct)" \
+             "$(printf %s "$BODY" | jget tag)" || die "answer failed verification"
+           echo
+           echo "$seq" > "$S/answered"
+           return ;;
+      204) ;;
+      404) gone ;;
+      *) die "answer poll failed ($CODE): $BODY" ;;
+    esac
+  done
+}
+
+case "${1:-}" in
+  ask)
+    [ ! -f "$S/pending" ] && [ "$(state seq 0)" = "$(state answered 0)" ] || die "a question is still pending; run: $0 wait"
+    fresh=; [ -f "$S/sid" ] || fresh=1
+    start
+    cat "${2:--}" > "$S/pending"
+    [ -z "$fresh" ] || pending "Give the user this link: $(link)"
+    resume ;;
+  wait) resume ;;
+  close)
+    if [ -f "$S/sid" ]; then req DELETE "/s/$(state sid)" || true; fi
+    rm -rf "$S" ;;
+  *)
+    cat >&2 <<USAGE
+usage: $0 ask <questions.json | ->   send a question, print the answer JSON
+       $0 wait                       keep waiting after PENDING
+       $0 close                      end the session
+exit: 0 answered, 1 error, 2 PENDING (run wait)
+env: ASKU_URL ASKU_SESSION ASKU_HOME ASKU_WAIT
+USAGE
+    exit 1 ;;
+esac

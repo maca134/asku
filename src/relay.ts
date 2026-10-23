@@ -53,8 +53,8 @@ async function body(req: Request) {
   return req.json().catch(() => null);
 }
 
-export function relay({ port = 0, db: path = ":memory:", holdMs = 25_000, ipHeader }: {
-  port?: number; db?: string; holdMs?: number; ipHeader?: string;
+export function relay({ port = 0, hostname, db: path = ":memory:", holdMs = 25_000, ipHeader }: {
+  port?: number; hostname?: string; db?: string; holdMs?: number; ipHeader?: string;
 } = {}) {
   const db = new Database(path, { create: true, strict: true });
   db.run("pragma journal_mode = wal");
@@ -223,6 +223,7 @@ export function relay({ port = 0, db: path = ":memory:", holdMs = 25_000, ipHead
 
   const server = Bun.serve({
     port,
+    hostname,
     idleTimeout: 60,
     maxRequestBodySize: LIMITS.body,
     async fetch(req, srv) {
@@ -247,6 +248,7 @@ export function relay({ port = 0, db: path = ":memory:", holdMs = 25_000, ipHead
 if (import.meta.main) {
   const { server } = relay({
     port: Number(process.env.PORT ?? 8080),
+    hostname: process.env.ASKU_HOST, // 127.0.0.1 behind a tunnel, so ASKU_IP_HEADER cannot be spoofed
     db: process.env.ASKU_DB ?? "asku.db",
     ipHeader: process.env.ASKU_IP_HEADER, // e.g. cf-connecting-ip behind Cloudflare
   });

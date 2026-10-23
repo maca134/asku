@@ -1,4 +1,5 @@
 # asku agent client. PowerShell 5.1 + .NET Framework only. Keep this file ASCII: PS 5.1 reads BOM-less files as ANSI.
+param([string]$Command, [string]$File)
 $ErrorActionPreference = 'Stop'
 
 function ConvertTo-AskuHex([byte[]]$Bytes) { [BitConverter]::ToString($Bytes).Replace('-', '').ToLower() }
@@ -80,3 +81,150 @@ function Get-AskuFragment([byte[]]$PubA, [byte[]]$Token) {
 }
 
 function Test-AskuBind([byte[]]$Token, [byte[]]$PubB, [byte[]]$Bind) { Test-AskuEqual (Get-AskuHmac $Token $PubB) $Bind }
+
+# ---- CLI ----------------------------------------------------------------------------------------
+if ($MyInvocation.InvocationName -eq '.') { return } # dot-sourced (tests): functions only
+
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+[Console]::OutputEncoding = New-Object Text.UTF8Encoding $false
+$Base = if ($env:ASKU_URL) { $env:ASKU_URL } else { 'https://asku.dev' }
+$Root = if ($env:ASKU_HOME) { $env:ASKU_HOME } else { Join-Path $env:USERPROFILE '.asku' }
+$S = Join-Path $Root $(if ($env:ASKU_SESSION) { $env:ASKU_SESSION } else { 'default' })
+$WaitSec = if ($env:ASKU_WAIT) { [int]$env:ASKU_WAIT } else { 500 } # no new poll after this; agent tool timeouts are ~600s
+
+function Fail([string]$Msg) { [Console]::Error.WriteLine("asku: $Msg"); exit 1 }
+function Pending([string]$Msg) { [Console]::Out.Write("PENDING`n$Msg`nRun again to keep waiting: $PSCommandPath wait`n"); exit 2 }
+function Get-State([string]$Name, $Default = $null) { $p = Join-Path $S $Name; if (Test-Path $p) { [IO.File]::ReadAllText($p).Trim() } else { $Default } }
+function Set-State([string]$Name, $Value) { [IO.File]::WriteAllText((Join-Path $S $Name), "$Value") }
+function Remove-Session { if (Test-Path $S) { Remove-Item -Recurse -Force $S } }
+
+# Returns @{ Code; Body }, or $null on network errors.
+function Invoke-AskuRequest([string]$Method, [string]$Path, [string]$Body) {
+    $r = [Net.HttpWebRequest]::Create("$Base$Path")
+    $r.Method = $Method; $r.Timeout = 40000; $r.ReadWriteTimeout = 40000; $r.ContentType = 'application/json'
+    $key = Get-State 'key'
+    if ($key) { $r.Headers['Authorization'] = "Bearer $key" }
+    try {
+        if ($Body) {
+            $b = [Text.Encoding]::UTF8.GetBytes($Body)
+            $s = $r.GetRequestStream(); $s.Write($b, 0, $b.Length); $s.Close()
+        }
+        $resp = $r.GetResponse()
+    } catch {
+        $e = $_.Exception
+        while ($e -and -not ($e -is [Net.WebException])) { $e = $e.InnerException }
+        if (-not $e -or -not $e.Response) { return $null }
+        $resp = $e.Response
+    }
+    try { @{ Code = [int]$resp.StatusCode; Body = (New-Object IO.StreamReader ($resp.GetResponseStream(), [Text.Encoding]::UTF8)).ReadToEnd() } }
+    finally { $resp.Close() }
+}
+
+function Start-AskuSession {
+    if (Test-Path (Join-Path $S 'sid')) { return }
+    New-Item -ItemType Directory -Force $S | Out-Null
+    $p = New-Object Security.Cryptography.CngKeyCreationParameters
+    $p.ExportPolicy = [Security.Cryptography.CngExportPolicies]::AllowPlaintextExport
+    # [NullString]: a plain $null becomes '' and creates a persisted key named '' in the user's key store
+    $k = [Security.Cryptography.CngKey]::Create([Security.Cryptography.CngAlgorithm]::ECDiffieHellmanP256, [NullString]::Value, $p)
+    if (-not $k.IsEphemeral) { throw 'asku: expected an ephemeral key' }
+    $blob = $k.Export([Security.Cryptography.CngKeyBlobFormat]::EccPrivateBlob)
+    $k.Dispose()
+    Set-State 'priv' ([Convert]::ToBase64String($blob))
+    Set-State 'pub' ([Convert]::ToBase64String([byte[]](@(4) + $blob[8..71])))
+    $t = New-Object byte[] 16
+    [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($t)
+    Set-State 'T' (ConvertTo-AskuHex $t)
+    $r = Invoke-AskuRequest POST '/s' ('{"pub":"' + (Get-State 'pub') + '"}')
+    if (-not $r) { Remove-Session; Fail "relay unreachable: $Base" }
+    if ($r.Code -ne 201) { Remove-Session; Fail "create failed ($($r.Code)): $($r.Body)" }
+    $j = $r.Body | ConvertFrom-Json
+    Set-State 'sid' $j.sid
+    Set-State 'key' $j.key
+}
+
+function Get-Link {
+    $frag = Get-AskuFragment ([Convert]::FromBase64String((Get-State 'pub'))) (ConvertFrom-AskuHex (Get-State 'T'))
+    "$Base/a/$(Get-State 'sid')#$frag"
+}
+
+function Exit-Gone { Remove-Session; Fail 'session expired or closed' }
+
+# Waits for the bind, sends the pending question, waits for its answer and prints it.
+function Resume-Asku {
+    if (-not (Test-Path (Join-Path $S 'sid'))) { Fail "no session; run: $PSCommandPath ask <file>" }
+    $sid = Get-State 'sid'
+    $deadline = (Get-Date).AddSeconds($WaitSec)
+    while (-not (Test-Path (Join-Path $S 'peer'))) {
+        if ((Get-Date) -ge $deadline) { Pending "The user has not opened the link yet. Give them: $(Get-Link)" }
+        $r = Invoke-AskuRequest GET "/s/$sid/bind"
+        if (-not $r) { Start-Sleep 2; continue }
+        switch ($r.Code) {
+            200 {
+                $j = $r.Body | ConvertFrom-Json
+                if (-not (Test-AskuBind (ConvertFrom-AskuHex (Get-State 'T')) ([Convert]::FromBase64String($j.pub)) ([Convert]::FromBase64String($j.mac)))) {
+                    $null = Invoke-AskuRequest DELETE "/s/$sid"; Remove-Session
+                    Fail 'the link was opened without the right token; session closed, start a new one'
+                }
+                Set-State 'peer' $j.pub
+            }
+            204 {}
+            404 { Exit-Gone }
+            default { Fail "bind poll failed ($($r.Code)): $($r.Body)" }
+        }
+    }
+    $keys = Get-AskuKeys ([Convert]::FromBase64String((Get-State 'priv'))) ([Convert]::FromBase64String((Get-State 'peer')))
+    $seq = [int](Get-State 'seq' 0)
+    $pendingFile = Join-Path $S 'pending'
+    if (Test-Path $pendingFile) {
+        $seq++
+        $envelope = Protect-AskuMessage $keys $sid 'q' $seq ([IO.File]::ReadAllBytes($pendingFile)) | ConvertTo-Json -Compress
+        do { $r = Invoke-AskuRequest POST "/s/$sid/q" $envelope; if (-not $r) { Start-Sleep 2 } } until ($r)
+        if ($r.Code -ne 204 -and $r.Code -ne 409) { Fail "send failed ($($r.Code)): $($r.Body)" } # 409: an earlier run already sent it
+        Set-State 'seq' $seq
+        Remove-Item $pendingFile
+    }
+    if ($seq -eq [int](Get-State 'answered' 0)) { Fail "no question pending; run: $PSCommandPath ask <file>" }
+    while ($true) {
+        if ((Get-Date) -ge $deadline) { Pending 'The user has not answered yet.' }
+        $r = Invoke-AskuRequest GET "/s/$sid/a?after=$($seq - 1)"
+        if (-not $r) { Start-Sleep 2; continue }
+        switch ($r.Code) {
+            200 {
+                try { $pt = Unprotect-AskuMessage $keys $sid 'a' $seq @($r.Body | ConvertFrom-Json)[0] } catch { Fail 'answer failed verification' }
+                [Console]::Out.Write([Text.Encoding]::UTF8.GetString($pt) + "`n")
+                Set-State 'answered' $seq
+                return
+            }
+            204 {}
+            404 { Exit-Gone }
+            default { Fail "answer poll failed ($($r.Code)): $($r.Body)" }
+        }
+    }
+}
+
+$usage = @"
+usage: $PSCommandPath ask <questions.json>   send a question, print the answer JSON
+       $PSCommandPath wait                   keep waiting after PENDING
+       $PSCommandPath close                  end the session
+exit: 0 answered, 1 error, 2 PENDING (run wait)
+env: ASKU_URL ASKU_SESSION ASKU_HOME ASKU_WAIT
+"@
+
+switch ($Command) {
+    'ask' {
+        if (-not $File -or -not (Test-Path $File)) { Fail 'ask needs a questions.json file' }
+        if ((Test-Path (Join-Path $S 'pending')) -or (Get-State 'seq' 0) -ne (Get-State 'answered' 0)) { Fail "a question is still pending; run: $PSCommandPath wait" }
+        $fresh = -not (Test-Path (Join-Path $S 'sid'))
+        Start-AskuSession
+        Copy-Item $File (Join-Path $S 'pending')
+        if ($fresh) { Pending "Give the user this link: $(Get-Link)" }
+        Resume-Asku
+    }
+    'wait' { Resume-Asku }
+    'close' {
+        if (Test-Path (Join-Path $S 'sid')) { $null = Invoke-AskuRequest DELETE "/s/$(Get-State 'sid')" }
+        Remove-Session
+    }
+    default { [Console]::Error.WriteLine($usage); exit 1 }
+}

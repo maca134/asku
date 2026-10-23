@@ -56,8 +56,23 @@ Verify TAG in constant time BEFORE decrypt.
 Answer shape: `{ "answers": { "<id>": value }, "skipped": [], "comments": { "<id>": "" }, "note": "" }`.
 Plaintext shapes are defined in [`schema.json`](schema.json).
 
+## Agent CLI
+`skill/ask.sh` and `skill/ask.ps1` take the same commands:
+```
+ask.sh ask <questions.json | ->   # ask.ps1 ask <questions.json>
+ask.sh wait
+ask.sh close
+```
+- Exit `0`: the answer JSON is on stdout. Exit `2`: stdout starts with `PENDING`; show the user any link it prints, then run `wait`. Exit `1`: error on stderr.
+- The first `ask` creates the session and returns `PENDING` right away with the link, so the agent can hand it to the user.
+- One question message per round: the next `ask` is refused until the last one is answered.
+- If the binding fails the token check, the session is deleted and the command exits `1`.
+- State lives in `~/.asku/<session>/`, mode 700. The agent private key never leaves it.
+- Env: `ASKU_URL` (default `https://asku.dev`), `ASKU_SESSION` (default `default`), `ASKU_HOME`, `ASKU_WAIT` (seconds before `PENDING`, default 500).
+
 ## Relay API
-[`src/relay.ts`](src/relay.ts). `bun src/relay.ts` (env: `PORT`, `ASKU_DB`, `ASKU_IP_HEADER` e.g. `cf-connecting-ip`).
+[`src/relay.ts`](src/relay.ts). `bun src/relay.ts` (env: `PORT`, `ASKU_DB`, `ASKU_HOST`, `ASKU_IP_HEADER`).
+Behind a Cloudflare Tunnel: `ASKU_HOST=127.0.0.1 ASKU_IP_HEADER=cf-connecting-ip`. Bind to localhost, or anyone reaching the port directly can forge the header and dodge the rate limit.
 POST bodies must be `application/json`. Writes take `Authorization: Bearer <key>`; reads only need the sid.
 
 | Who | Request | Response |
