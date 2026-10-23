@@ -31,6 +31,16 @@
       "type": "boolean",
       "description": "Adds an \"Other\" option with a text box. A write-in comes back as a plain value; a default matching no option pre-fills the box."
     },
+    "when": {
+      "type": "object",
+      "description": "Show this question only when an earlier question in the same batch has this answer: true/false for confirm, an option value for single, and for multi, an option value it contains. Hidden questions are never required and come back in skipped.",
+      "required": ["id", "is"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "is": { "type": ["boolean", "string"], "minLength": 1, "maxLength": 200 }
+      }
+    },
     "item": {
       "type": "object",
       "required": ["id", "type", "label"],
@@ -39,7 +49,8 @@
         "type": { "enum": ["confirm", "single", "multi", "review", "rank", "text", "number", "date"] },
         "label": { "type": "string", "minLength": 1, "maxLength": 500 },
         "md": { "$ref": "#/$defs/markdown", "description": "Per-question markdown context." },
-        "required": { "type": "boolean" }
+        "required": { "type": "boolean" },
+        "when": { "$ref": "#/$defs/when" }
       },
       "allOf": [
         {
@@ -51,6 +62,7 @@
               "label": true,
               "md": true,
               "required": true,
+              "when": true,
               "default": { "type": "boolean" }
             },
             "additionalProperties": false
@@ -66,6 +78,7 @@
               "label": true,
               "md": true,
               "required": true,
+              "when": true,
               "options": { "type": "array", "items": { "$ref": "#/$defs/option" }, "minItems": 1, "maxItems": 100 },
               "default": { "type": "string" },
               "other": { "$ref": "#/$defs/other" }
@@ -83,6 +96,7 @@
               "label": true,
               "md": true,
               "required": true,
+              "when": true,
               "options": { "type": "array", "items": { "$ref": "#/$defs/option" }, "minItems": 1, "maxItems": 100 },
               "default": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
               "min": { "type": "integer", "minimum": 0 },
@@ -103,6 +117,7 @@
               "label": true,
               "md": true,
               "required": true,
+              "when": true,
               "options": { "type": "array", "items": { "$ref": "#/$defs/option" }, "minItems": 1, "maxItems": 100 }
             },
             "additionalProperties": false
@@ -119,6 +134,7 @@
               "label": true,
               "md": true,
               "required": true,
+              "when": true,
               "options": { "type": "array", "items": { "$ref": "#/$defs/option" }, "minItems": 1, "maxItems": 100 }
             },
             "additionalProperties": false
@@ -133,6 +149,7 @@
               "label": true,
               "md": true,
               "required": true,
+              "when": true,
               "default": { "type": "string" },
               "placeholder": { "type": "string", "maxLength": 200 },
               "multiline": { "type": "boolean" },
@@ -150,6 +167,7 @@
               "label": true,
               "md": true,
               "required": true,
+              "when": true,
               "default": { "type": "number" },
               "min": { "type": "number" },
               "max": { "type": "number" },
@@ -174,6 +192,7 @@
               "label": true,
               "md": true,
               "required": true,
+              "when": true,
               "time": { "type": "boolean" },
               "default": true,
               "min": true,

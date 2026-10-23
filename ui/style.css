@@ -1581,6 +1581,9 @@ fieldset.q,
     box-shadow 0.2s;
   scroll-margin-top: 1em;
 }
+fieldset.q[hidden] {
+  display: none;
+}
 fieldset.q legend {
   float: left;
   width: 100%;

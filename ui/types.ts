@@ -1,7 +1,7 @@
 // The wire formats: what the agent sends (see schema.json) and what the page answers.
 export type Option = string | { value: string; label?: string; md?: string };
 
-type Base = { id: string; label: string; md?: string; required?: boolean };
+type Base = { id: string; label: string; md?: string; required?: boolean; when?: { id: string; is: string | boolean } };
 export type ConfirmItem = Base & { type: "confirm"; default?: boolean };
 export type SingleItem = Base & { type: "single"; options: Option[]; default?: string; other?: boolean };
 export type MultiItem = Base & {

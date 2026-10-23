@@ -17,6 +17,7 @@ test("anything else opens the page instead", () => {
   expect(quickConfirm({ questions: [confirm], mood: "nervous" })).toBeNull();
   expect(quickConfirm({ say: "Deploying now" })).toBeNull();
   expect(quickConfirm({ questions: [{ id: "ship", type: "confirm" }] })).toBeNull();
+  expect(quickConfirm({ questions: [{ ...confirm, when: { id: "ship", is: true } }] })).toBeNull(); // the page rejects it
 });
 
 test("a notification answer is the one the page sends for that question", () => {

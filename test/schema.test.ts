@@ -88,6 +88,27 @@ test("number: display slider needs min and max", () => {
   expect(valid("question", q({ type: "text", display: "slider", min: 0, max: 1 }))).toBe(false);
 });
 
+test("when: show a question only for one answer to an earlier one", () => {
+  const ask = (...questions: object[]) => ({ questions });
+  const go = { id: "go", type: "confirm", label: "Go?" };
+  const env = { id: "env", type: "single", label: "Env", options: ["staging", "prod"] };
+  for (const type of ["confirm", "text", "number", "date"])
+    expect(valid("question", ask(go, { id: "y", type, label: "Y", when: { id: "go", is: true } }))).toBe(true);
+  for (const type of ["single", "multi", "review", "rank"])
+    expect(
+      valid("question", ask(env, { id: "y", type, label: "Y", options: ["a"], when: { id: "env", is: "prod" } })),
+    ).toBe(true);
+  const dependent = (when: unknown) => ask(go, { id: "y", type: "text", label: "Y", when });
+  expect(valid("question", dependent({ id: "go" }))).toBe(false);
+  expect(valid("question", dependent({ is: true }))).toBe(false);
+  expect(valid("question", dependent({ id: "go", is: 1 }))).toBe(false);
+  expect(valid("question", dependent({ id: "go", is: "" }))).toBe(false);
+  expect(valid("question", dependent({ id: "go", is: ["a", "b"] }))).toBe(false); // no or
+  expect(valid("question", dependent({ id: "go", is: true, not: true }))).toBe(false); // no operators
+  expect(valid("question", dependent([{ id: "go", is: true }]))).toBe(false); // no and
+  expect(valid("question", dependent({ id: "bad id", is: true }))).toBe(false);
+});
+
 test("deadline, mood, say and delegated", () => {
   expect(
     valid("question", {
