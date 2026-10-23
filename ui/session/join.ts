@@ -1,4 +1,4 @@
-import { bindTag, checkFragment, deriveKeys, newKeyPair } from "../../shared/crypto";
+import { bindTag, type Bytes, checkFragment, deriveKeys, newKeyPair } from "../../shared/crypto";
 import { home, status } from "../page";
 import { listen } from "./listen";
 import { post } from "./send";
@@ -20,7 +20,7 @@ export async function join(sid: string) {
     if (res.status === 404) return status("error", "This session has ended or expired", "Ask the agent for a new link.", home());
     const { pub } = await res.json();
     const agentPub = Uint8Array.fromBase64(pub);
-    let token: Uint8Array;
+    let token: Bytes;
     try {
       token = await checkFragment(frag, agentPub);
     } catch {
@@ -33,5 +33,5 @@ export async function join(sid: string) {
     state = { priv: b.priv, agentPub: pub, key: (await res2.json()).key, answered: [] };
     await save(sid, state);
   }
-  listen(sid, await deriveKeys(state.priv, Uint8Array.fromBase64(state.agentPub)), state);
+  listen(sid, await deriveKeys(state.priv, Uint8Array.fromBase64(state.agentPub!)), state);
 }

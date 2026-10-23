@@ -95,7 +95,7 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
   }
 
   // Browser feed of questions. Resumes from Last-Event-ID or ?after.
-  function feed(req: Request, srv: Server, sid: string, after: number) {
+  function feed(req: Request, srv: Server<undefined>, sid: string, after: number) {
     const te = new TextEncoder();
     let cleanup = () => {};
     const stream = new ReadableStream({
@@ -135,7 +135,7 @@ export function relay({ port = 0, hostname, db: path = ":memory:", dist = `${imp
   const authed = (req: Request, key: string | null) =>
     key !== null && sha(req.headers.get("authorization")?.replace(/^Bearer /, "") ?? "") === key;
 
-  async function route(req: Request, srv: Server): Promise<Response> {
+  async function route(req: Request, srv: Server<undefined>): Promise<Response> {
     const url = new URL(req.url);
     const m = req.method;
     const page = url.pathname.match(/^\/(how|security|demo|install|start|terms)?$/);

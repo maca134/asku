@@ -7,7 +7,7 @@ export type Kid = Node | string | null | undefined | false;
 export const app = document.getElementById("app")!;
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export function h<K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLElementTagNameMap[K]> | Record<string, unknown> = {}, ...kids: Kid[]) {
+export function h<K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<NoInfer<HTMLElementTagNameMap[K]>> = {}, ...kids: Kid[]): HTMLElementTagNameMap[K] {
   const el = Object.assign(document.createElement(tag), props);
   el.append(...kids.filter((k): k is Node | string => k != null && k !== false));
   return el;
