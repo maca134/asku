@@ -10,7 +10,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       # Windows: Git Bash, not the WSL bash.exe in System32
-      ASKU_BASH: ${{ runner.os == 'Windows' && 'C:\Program Files\Git\bin\bash.exe' || 'bash' }}
+      ASKU_BASH: ${{ matrix.os == 'windows-latest' && 'C:\Program Files\Git\bin\bash.exe' || 'bash' }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
