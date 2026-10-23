@@ -48,6 +48,18 @@ test("review: approve or reject each option, answered as a map", () => {
   expect(valid("answer", { answers: { x: { a: "yes" } } })).toBe(false);
 });
 
+test("rank: order the options, answered as the full list", () => {
+  expect(valid("question", q({ type: "rank", options: ["a", { value: "b", md: "*why*" }], required: true }))).toBe(
+    true,
+  );
+  expect(valid("question", q({ type: "rank" }))).toBe(false); // options required
+  expect(valid("question", q({ type: "rank", options: [] }))).toBe(false);
+  expect(valid("question", q({ type: "rank", options: ["a"], default: ["a"] }))).toBe(false);
+  expect(valid("question", q({ type: "rank", options: ["a", "b"], max: 1 }))).toBe(false); // no top-N
+  expect(valid("question", q({ type: "rank", options: ["a"], other: true }))).toBe(false);
+  expect(valid("answer", { answers: { x: ["b", "a"] }, skipped: [] })).toBe(true);
+});
+
 test("deadline, mood, say and delegated", () => {
   expect(
     valid("question", {
