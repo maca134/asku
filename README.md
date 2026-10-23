@@ -56,8 +56,27 @@ Verify TAG in constant time BEFORE decrypt.
 Answer shape: `{ "answers": { "<id>": value }, "skipped": [], "comments": { "<id>": "" }, "note": "" }`.
 Plaintext shapes are defined in [`schema.json`](schema.json).
 
+## Relay API
+[`src/relay.ts`](src/relay.ts). `bun src/relay.ts` (env: `PORT`, `ASKU_DB`, `ASKU_IP_HEADER` e.g. `cf-connecting-ip`).
+POST bodies must be `application/json`. Writes take `Authorization: Bearer <key>`; reads only need the sid.
+
+| Who | Request | Response |
+|---|---|---|
+| agent | `POST /s {pub}` | `201 {sid, key}`: `key` is the agent's write key |
+| agent | `GET /s/:sid/bind` | long-poll: `{pub, mac}` once bound, else `204` after 25s |
+| agent | `POST /s/:sid/q` envelope, agent key | `204`; `seq` must be last q + 1, else `409` |
+| agent | `GET /s/:sid/a?after=n` | long-poll: `[envelope…]` with seq > n, else `204` after 25s |
+| agent | `DELETE /s/:sid`, agent key | `204`, session purged |
+| browser | `GET /s/:sid` | `{pub, bound}` |
+| browser | `POST /s/:sid/bind {pub, mac}` | `201 {key}`: the browser's write key. `409` if already bound |
+| browser | `GET /s/:sid/q?after=n` | SSE: `event: q` with `id: seq`, data = envelope; `event: close` on purge. Resumes from `Last-Event-ID` |
+| browser | `POST /s/:sid/a` envelope, browser key | `204`; `seq` must match an asked q not yet answered, else `409` |
+
+Errors are `{error}` with `400 401 404 409 413 429`. The relay stores only sha256 of write keys.
+The browser must persist its key pair B (non-extractable `CryptoKey` in IndexedDB) and write key: the fragment is cleared after first load.
+
 ## Relay hygiene
-- Payload cap 256 KB. Per-IP rate limit on session creation.
+- Payload cap 256 KB, 8 MB and 1000 questions per session. Per-IP rate limit on session creation (20 / 10 min).
 - Purge on `close`. 24h idle TTL as fallback.
 - Headers: CSP `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'` and `Referrer-Policy: no-referrer`.
 
