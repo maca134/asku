@@ -208,6 +208,44 @@ for (const c of clients) {
     expect((await run(["close"])).code).toBe(0);
   }, 180_000);
 
+  test.skipIf(!c.on)(`${c.name} says things and gives up at a deadline`, async () => {
+    const { home, run } = agent(c.cmd, { ASKU_URL: base, ASKU_SESSION: "t", ASKU_WAIT: "30" });
+    const late = `${home}/late.json`;
+    writeFileSync(late, JSON.stringify({ deadline: 2, mood: "nervous", questions: [{ id: "x", type: "confirm", label: "Go?" }] }));
+    expect((await run(["say", "hi"])).code).toBe(1); // no session
+
+    // nobody opens the link: wait gives up once the deadline passes
+    let res = await run(["ask", late]);
+    expect(res.code).toBe(2);
+    const link = res.out.match(/https?:\/\/\S+#[0-9a-f]{64}\.[0-9a-f]{32}/)![0];
+    expect((await run(["say", "queued"])).out).toContain("Queued");
+    res = await run(["wait"]);
+    expect(res.code).toBe(0);
+    expect(JSON.parse(res.out)).toEqual({ seqs: [1], answers: {}, skipped: ["x"], comments: {}, note: "", timeout: true });
+
+    // bound: says go straight out, text is escaped, and a late batch carries when it was asked
+    const b = await browser(link);
+    const text = 'Tests "42/50" \\ done\n\t— 日本語';
+    res = await run(["say", text]);
+    expect(res.out).toContain("Said");
+    expect(await b.question(1)).toEqual({ say: "queued" }); // the timed-out batch never went out, so no gap
+    expect(await b.question(2)).toEqual({ say: text });
+    const before = Math.floor(Date.now() / 1000);
+    res = await run(["wait"]);
+    expect(res.code).toBe(1); // a say is never answered
+    await run(["add", late]);
+    const q = await b.question(3);
+    expect(q.deadline).toBe(2);
+    expect(q.mood).toBe("nervous");
+    expect(q.sent).toBeGreaterThanOrEqual(before);
+    res = await run(["wait"]);
+    expect(JSON.parse(res.out).timeout).toBe(true);
+    await b.answer(3, { answers: { x: true }, skipped: [], comments: {}, note: "" }); // too late: nobody is listening
+    expect((await run(["wait"])).code).toBe(1);
+
+    expect((await run(["close"])).code).toBe(0);
+  }, 120_000);
+
   test.skipIf(!c.on)(`${c.name} rejects a binding without the token`, async () => {
     const { home, run } = agent(c.cmd, { ASKU_URL: base, ASKU_WAIT: "5" });
     const link = (await run(["ask", `${home}/q.json`])).out.match(/https?:\/\/\S+#\S+/)![0];

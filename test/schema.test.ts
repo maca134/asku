@@ -21,4 +21,14 @@ test("bad shapes are rejected", () => {
   expect(valid("question", q({ type: "text", id: "bad id" }))).toBe(false);
   expect(valid("answer", { answers: { x: { nested: 1 } } })).toBe(false);
   expect(valid("answer", { answers: {}, extra: 1 })).toBe(false);
+  expect(valid("question", { ...q({ type: "confirm" }), mood: "smug" })).toBe(false);
+  expect(valid("question", { ...q({ type: "confirm" }), deadline: 0 })).toBe(false);
+  expect(valid("say", { say: "" })).toBe(false);
+  expect(valid("say", { say: "hi", questions: [] })).toBe(false);
+});
+
+test("deadline, mood, say and delegated", () => {
+  expect(valid("question", { ...q({ type: "confirm" }), deadline: 600, sent: 1761200000, mood: "begging" })).toBe(true);
+  expect(valid("say", { say: "Tests **42/50**" })).toBe(true);
+  expect(valid("answer", { answers: {}, delegated: ["x"], timeout: true })).toBe(true);
 });

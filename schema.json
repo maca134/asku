@@ -104,7 +104,19 @@
       "properties": {
         "title": { "type": "string", "maxLength": 200 },
         "md": { "$ref": "#/$defs/markdown", "description": "Markdown context shown above all questions." },
-        "questions": { "type": "array", "items": { "$ref": "#/$defs/item" }, "minItems": 1, "maxItems": 50 }
+        "questions": { "type": "array", "items": { "$ref": "#/$defs/item" }, "minItems": 1, "maxItems": 50 },
+        "deadline": { "type": "integer", "minimum": 1, "maximum": 86400, "description": "Seconds the user has to answer. After that the page locks the batch and the client returns a timeout answer." },
+        "sent": { "type": "integer", "minimum": 0, "description": "Unix seconds when the batch was asked. Added by the client when there is a deadline." },
+        "mood": { "enum": ["confident", "excited", "nervous", "begging", "grumpy", "sheepish"], "description": "How the agent feels about asking. Changes the form's look." }
+      }
+    },
+    "say": {
+      "description": "A one-way status update from the agent, shown in the page's feed. Never answered.",
+      "type": "object",
+      "required": ["say"],
+      "additionalProperties": false,
+      "properties": {
+        "say": { "type": "string", "minLength": 1, "maxLength": 10000 }
       }
     },
     "answer": {
@@ -128,6 +140,8 @@
           "additionalProperties": { "type": "string", "maxLength": 10000 }
         },
         "note": { "type": "string", "maxLength": 10000 },
+        "delegated": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true, "description": "Questions the user left to the agent to decide." },
+        "timeout": { "type": "boolean", "description": "Set by the client when the deadline passed without an answer." },
         "error": { "type": "string", "maxLength": 2000, "description": "Set by the browser when it could not show the question, e.g. it failed schema validation." }
       }
     },

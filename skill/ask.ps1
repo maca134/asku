@@ -1,7 +1,7 @@
 # asku agent client. PowerShell 5.1 + .NET Framework only. Keep this file ASCII: PS 5.1 reads BOM-less files as ANSI.
 param([string]$Command, [string]$File)
 $ErrorActionPreference = 'Stop'
-$Version = '1.2.0' # keep in step with ask.sh
+$Version = '1.3.0' # keep in step with ask.sh
 
 function ConvertTo-AskuHex([byte[]]$Bytes) { [BitConverter]::ToString($Bytes).Replace('-', '').ToLower() }
 
@@ -199,6 +199,32 @@ function Get-AskuIds([string]$Path) {
     @($j.questions | ForEach-Object { $_.id })
 }
 
+function Get-AskuNextSeq { (@([int](Get-State 'seq' 0)) + @(Get-Batches 'q') | Measure-Object -Maximum).Maximum + 1 }
+function Get-AskuNow { [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() }
+
+# Batches of the given kinds (q, o) whose deadline (d<seq>, unix seconds) has passed.
+function Get-AskuExpired([string[]]$Kinds) {
+    $now = Get-AskuNow
+    @(foreach ($k in $Kinds) { foreach ($n in Get-Batches $k) { $d = Get-State "d$n"; if ($d -and [long]$d -le $now) { $n } } }) | Sort-Object
+}
+
+# The user ran out of time: drops those batches and prints a timeout answer for them.
+function Exit-AskuTimeout([int[]]$Seqs) {
+    $ids = @(foreach ($n in $Seqs) {
+        foreach ($k in 'q', 'o') {
+            $f = Join-Path $S "$k$n.json"
+            if (Test-Path $f) { Get-AskuIds $f; Remove-Item $f }
+        }
+        Remove-Item -ErrorAction SilentlyContinue (Join-Path $S "d$n")
+    })
+    $skipped = ($ids | ForEach-Object { '"' + $_ + '"' }) -join ','
+    [Console]::Out.Write('{"seqs":[' + ($Seqs -join ',') + '],"answers":{},"skipped":[' + $skipped + '],"comments":{},"note":"","timeout":true}' + "`n")
+    $left = (Get-Batches 'o').Count
+    if ($left) { [Console]::Error.WriteLine("asku: $left batch(es) still pending; run: $Self wait") }
+    exit 0
+}
+function Test-AskuExpired([string[]]$Kinds) { $x = @(Get-AskuExpired $Kinds); if ($x.Count) { Exit-AskuTimeout $x } }
+
 # Queues a batch onto the open form, starting a session (and printing its link) if there is none.
 # The 50-question limit and unique ids span the whole form.
 function Add-AskuBatch([string]$File) {
@@ -211,9 +237,24 @@ function Add-AskuBatch([string]$File) {
     if ($dup.Count) { Fail "ids already in the open form: $($dup -join ', ')" }
     if ($open.Count + $new.Count -gt 50) { Fail "the open form would have $($open.Count + $new.Count) questions, the limit is 50" }
     Start-AskuSession
-    $seq = (@([int](Get-State 'seq' 0)) + @(Get-Batches 'q') | Measure-Object -Maximum).Maximum + 1
-    Copy-Item $File (Join-Path $S "q$seq.json")
+    $seq = Get-AskuNextSeq
+    # a deadline counts from now: remember when it ends, and tell the page when the batch was asked
+    $text = [IO.File]::ReadAllText($File)
+    $deadline = ($text | ConvertFrom-Json).deadline
+    if ($deadline) {
+        $now = Get-AskuNow
+        Set-State "d$seq" ($now + [long]$deadline)
+        $text = '{"sent":' + $now + ',' + $text.Substring($text.IndexOf('{') + 1)
+    }
+    [IO.File]::WriteAllText((Join-Path $S "q$seq.json"), $text)
     if ($fresh) { Pending "Give the user this link: $(Get-Link)" }
+}
+
+# A one-way update for the page's feed. Queued until the user opens the link; never answered.
+function Add-AskuSay([string]$Text) {
+    if (-not (Test-Path (Join-Path $S 'sid'))) { Fail 'no session; say only works while a form is open or after join' }
+    if (-not $Text) { Fail 'say needs some text' }
+    [IO.File]::WriteAllText((Join-Path $S "q$(Get-AskuNextSeq).json"), (@{ say = $Text } | ConvertTo-Json -Compress))
 }
 
 # Waits for the bind (or checks it once with -NoWait), then sends the queued batches. Returns the keys, or $null if not bound yet.
@@ -227,6 +268,7 @@ function Send-Asku([switch]$NoWait) {
         if (-not $r -or $r.Code -ne 200 -or -not ($r.Body | ConvertFrom-Json).bound) { return $null }
     }
     while (-not (Test-Path (Join-Path $S 'peer'))) {
+        Test-AskuExpired 'q'
         if ((Get-Date) -ge $deadline) { Pending "The user has not opened the link yet. Give them: $(Get-Link)" }
         $r = Invoke-AskuRequest GET "/s/$sid/bind"
         if (-not $r) { Start-Sleep 2; continue }
@@ -245,8 +287,10 @@ function Send-Asku([switch]$NoWait) {
         }
     }
     $keys = Get-AskuKeys ([Convert]::FromBase64String((Get-State 'priv'))) ([Convert]::FromBase64String((Get-State 'peer')))
-    foreach ($seq in Get-Batches 'q') {
-        $f = Join-Path $S "q$seq.json"
+    # Queue numbers can have gaps (a batch that timed out before it was sent); the relay needs seqs without any.
+    foreach ($n in Get-Batches 'q') {
+        $f = Join-Path $S "q$n.json"
+        $seq = [int](Get-State 'seq' 0) + 1
         $envelope = Protect-AskuMessage $keys $sid 'q' $seq ([IO.File]::ReadAllBytes($f)) | ConvertTo-Json -Compress
         do {
             $r = Invoke-AskuRequest POST "/s/$sid/q" $envelope
@@ -254,13 +298,17 @@ function Send-Asku([switch]$NoWait) {
         } until ($r)
         if ($r.Code -ne 204 -and -not ($r.Code -eq 409 -and $r.Body -match 'duplicate')) { Fail "send failed ($($r.Code)): $($r.Body)" } # duplicate: an earlier run sent it
         Set-State 'seq' $seq
+        if ([IO.File]::ReadAllText($f).StartsWith('{"say":')) { Remove-Item $f; continue }
         Move-Item -Force $f (Join-Path $S "o$seq.json")
+        $d = Join-Path $S "d$n"
+        if (Test-Path $d) { Move-Item -Force $d (Join-Path $S "d$seq") }
     }
     @{ Keys = $keys; Sid = $sid; Deadline = $deadline }
 }
 
 # Waits for the next answer to an open batch and prints it. One answer can cover several batches (its seqs).
 function Wait-Asku {
+    Test-AskuExpired 'q'
     $c = Send-Asku
     if (-not (Get-Batches 'o').Count) { Fail "no question pending; run: $Self ask <file>" }
     # From the oldest open batch, not a cursor: an error for batch 3 can land before the answer to batch 2.
@@ -273,7 +321,7 @@ function Wait-Asku {
             200 {
                 $all = @($r.Body | ConvertFrom-Json | ForEach-Object { $_ }) # PS 5.1 emits a JSON array as one object
                 $env = $all | Where-Object { Test-Path (Join-Path $S "o$($_.seq).json") } | Select-Object -First 1
-                if (-not $env) { Start-Sleep 2; break } # all already handled; keep the cursor, a lower seq can still arrive
+                if (-not $env) { Test-AskuExpired 'o'; Start-Sleep 2; break } # all already handled; keep the cursor, a lower seq can still arrive
                 $seq = [int]$env.seq
                 try { $text = [Text.Encoding]::UTF8.GetString((Unprotect-AskuMessage $c.Keys $c.Sid 'a' $seq $env)) } catch { Fail 'answer failed verification' }
                 # seqs (inside the encrypted answer) names the batches it covers; older pages: an error covers its own, an answer all up to it
@@ -285,7 +333,7 @@ function Wait-Asku {
                 if ($left) { [Console]::Error.WriteLine("asku: $left batch(es) still pending; run: $Self wait") }
                 exit 0
             }
-            204 {}
+            204 { Test-AskuExpired 'o' } # checked after a poll, so an answer that beat the deadline wins
             404 { Exit-Gone }
             default { Fail "answer poll failed ($($r.Code)): $($r.Body)" }
         }
@@ -296,6 +344,7 @@ $usage = @"
 usage: $Self ask <questions.json>   send a question, print the answer JSON
        $Self add <questions.json>   append questions to the open form without waiting
        $Self join <agent link>      join a session the user started, print their opening note
+       $Self say "<text>"           show a one-way update on the user's page
        $Self wait                   keep waiting after PENDING
        $Self close                  end the session
        $Self version                print the client version
@@ -315,6 +364,11 @@ switch ($Command) {
         Pending 'Sent. Add more with add, or run wait for the answer.'
     }
     'join' { Join-AskuSession $File; Wait-Asku }
+    'say' {
+        Add-AskuSay $File
+        if (-not (Send-Asku -NoWait)) { [Console]::Out.Write("Queued: it shows once the user opens the link.`n"); exit 0 }
+        [Console]::Out.Write("Said.`n")
+    }
     'wait' { Wait-Asku }
     'version' { [Console]::Out.Write("$Version`n") }
     'close' {

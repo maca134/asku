@@ -47,7 +47,7 @@ function body(p: Page) {
 async function build() {
   const ajv = new Ajv({ code: { source: true, esm: true }, allErrors: true, allowUnionTypes: true });
   ajv.addSchema(schema);
-  await Bun.write("web/gen/validate.js", standalone(ajv, { question: `${schema.$id}#/$defs/question` }));
+  await Bun.write("web/gen/validate.js", standalone(ajv, { question: `${schema.$id}#/$defs/question`, say: `${schema.$id}#/$defs/say` }));
 
   await rm("dist", { recursive: true, force: true });
   const out = await Bun.build({

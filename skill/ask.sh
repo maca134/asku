@@ -3,7 +3,7 @@
 # ponytail: LibreSSL (macOS /usr/bin/openssl) lacks `dgst -macopt hexkey`; hand-rolled HMAC if macOS agents matter.
 set -euo pipefail
 
-VERSION=1.2.0 # keep in step with ask.ps1
+VERSION=1.3.0 # keep in step with ask.ps1
 
 SPKI_P256=3059301306072a8648ce3d020106082a8648ce3d030107034200
 
@@ -137,6 +137,27 @@ batches() { local f; for f in "$S/$1"*.json; do [ -e "$f" ] || continue; f=${f##
 # ponytail: grep, not a JSON parser; `"id":"` can't match inside a JSON string, whose quotes are escaped
 ids() { grep -o '"id"[[:space:]]*:[[:space:]]*"[A-Za-z0-9_-]*"' "$1" | sed 's/.*"\([^"]*\)"$/\1/' || true; }
 
+# Next free seq: after the last sent batch and anything queued.
+next_seq() { local seq n; seq=$(state seq 0); for n in $(batches q); do [ "$n" -le "$seq" ] || seq=$n; done; echo $((seq + 1)); }
+
+# Batches of the given kinds (q, o) whose deadline (d<seq>, unix seconds) has passed.
+expired() { local k n now; now=$(date +%s); for k in "$@"; do for n in $(batches "$k"); do
+  [ ! -f "$S/d$n" ] || [ "$(cat "$S/d$n")" -gt "$now" ] || echo "$n"; done; done | sort -n; }
+
+# timedout <seq...>: the user ran out of time. Drops those batches and prints a timeout answer for them.
+timedout() {
+  local n ids= left
+  for n in "$@"; do
+    ids="$ids $(ids "$S/q$n.json" 2>/dev/null) $(ids "$S/o$n.json" 2>/dev/null)"
+    rm -f "$S/q$n.json" "$S/o$n.json" "$S/d$n"
+  done
+  ids=$(for n in $ids; do printf '"%s",' "$n"; done)
+  printf '{"seqs":[%s],"answers":{},"skipped":[%s],"comments":{},"note":"","timeout":true}\n' "$(echo "$@" | tr ' ' ,)" "${ids%,}"
+  left=$(batches o | grep -c . || true)
+  [ "$left" = 0 ] || echo "asku: $left batch(es) still pending; run: $0 wait" >&2
+  exit 0
+}
+
 # add <file | ->: queues a batch onto the open form, starting a session (and printing its link) if there is none.
 # The 50-question limit and unique ids span the whole form.
 add() {
@@ -155,15 +176,33 @@ add() {
   n=$(printf '%s\n%s\n' "$new" "$open" | grep -c . || true)
   [ "$n" -le 50 ] || die "the open form would have $n questions, the limit is 50"
   start
-  seq=$(state seq 0); for n in $(batches q); do [ "$n" -le "$seq" ] || seq=$n; done
-  cp "$f" "$S/q$((seq + 1)).json"
+  seq=$(next_seq)
+  # a deadline counts from now: remember when it ends, and tell the page when the batch was asked
+  k=$(tr -d ' \t\r\n' < "$f" | grep -o '"deadline":[0-9]*' | head -n1 | cut -d: -f2 || true)
+  if [ -n "$k" ]; then
+    n=$(date +%s)
+    echo $((n + k)) > "$S/d$seq"
+    new=$(cat "$f")
+    printf '{"sent":%d,%s' "$n" "${new#*\{}" > "$S/q$seq.json"
+  else
+    cp "$f" "$S/q$seq.json"
+  fi
   [ -z "$fresh" ] || pending "Give the user this link: $(link)"
+}
+
+# say <text...>: a one-way update for the page's feed. Queued until the user opens the link; never answered.
+say() {
+  [ -f "$S/sid" ] || die "no session; say only works while a form is open or after join"
+  [ $# -gt 0 ] && [ -n "$*" ] || die "say needs some text"
+  local t="$*"
+  t=${t//\\/\\\\}; t=${t//\"/\\\"}; t=${t//$'\n'/\\n}; t=${t//$'\r'/\\r}; t=${t//$'\t'/\\t}
+  printf '{"say":"%s"}' "$t" | tr -d '\000-\010\013\014\016-\037' > "$S/q$(next_seq).json"
 }
 
 # send [nowait]: waits for the bind (or checks it once), then sends the queued batches. Returns 1 if not bound yet.
 send() {
   [ -f "$S/sid" ] || die "no session; run: $0 ask <file>"
-  local sid n pub k
+  local sid n s pub k
   sid=$(state sid)
   DEADLINE=$((SECONDS + WAIT))
   if [ -n "${1:-}" ] && [ ! -f "$S/K" ]; then
@@ -172,6 +211,7 @@ send() {
     [ "$CODE" = 200 ] && [[ $BODY == *'"bound":true'* ]] || return 1
   fi
   while [ ! -f "$S/K" ]; do
+    n=$(expired q); [ -z "$n" ] || timedout $n
     [ $SECONDS -lt $DEADLINE ] || pending "The user has not opened the link yet. Give them: $(link)"
     req GET "/s/$sid/bind" || { sleep 2; continue; }
     case $CODE in
@@ -187,22 +227,27 @@ send() {
       *) die "bind poll failed ($CODE): $BODY" ;;
     esac
   done
+  # Queue numbers can have gaps (a batch that timed out before it was sent); the relay needs seqs without any.
   for n in $(batches q); do
-    BODY=$(seal "$(state K)" "$sid" q "$n" < "$S/q$n.json")
+    s=$(( $(state seq 0) + 1 ))
+    BODY=$(seal "$(state K)" "$sid" q "$s" < "$S/q$n.json")
     until req POST "/s/$sid/q" "$BODY"; do
       [ $SECONDS -lt $DEADLINE ] || pending "Could not reach the relay at $BASE; questions are still queued."
       sleep 2
     done
     [ "$CODE" = 204 ] || [[ $CODE = 409 && $BODY == *duplicate* ]] || die "send failed ($CODE): $BODY" # duplicate: an earlier run sent it
-    echo "$n" > "$S/seq"
-    mv "$S/q$n.json" "$S/o$n.json"
+    echo "$s" > "$S/seq"
+    if [[ $(head -c 7 "$S/q$n.json") == '{"say":' ]]; then rm "$S/q$n.json"; continue; fi
+    mv "$S/q$n.json" "$S/o$s.json"
+    [ ! -f "$S/d$n" ] || mv "$S/d$n" "$S/d$s"
   done
 }
 
 # Waits for the next answer to an open batch and prints it. One answer can cover several batches (its seqs).
 answer() {
-  send
   local sid after list nl e env seq text covered n left
+  n=$(expired q); [ -z "$n" ] || timedout $n
+  send
   sid=$(state sid)
   [ -n "$(batches o)" ] || die "no question pending; run: $0 ask <file>"
   # From the oldest open batch, not a cursor: an error for batch 3 can land before the answer to batch 2.
@@ -217,7 +262,10 @@ answer() {
              seq=$(printf %s "$e" | jget seq)
              if [ -f "$S/o$seq.json" ]; then env=$e; break; fi
            done <<< "${list//\},\{/$nl}"
-           [ -n "$env" ] || { sleep 2; continue; } # all already handled; keep the cursor, a lower seq can still arrive
+           if [ -z "$env" ]; then # all already handled; keep the cursor, a lower seq can still arrive
+             n=$(expired o); [ -z "$n" ] || timedout $n
+             sleep 2; continue
+           fi
            text=$(open "$(state K)" "$sid" a "$seq" "$(printf %s "$env" | jget iv)" "$(printf %s "$env" | jget ct)" \
              "$(printf %s "$env" | jget tag)") || die "answer failed verification"
            # seqs (first key, inside the encrypted answer) names the batches it covers; older pages: an error covers
@@ -230,7 +278,7 @@ answer() {
            left=$(batches o | grep -c . || true)
            [ "$left" = 0 ] || echo "asku: $left batch(es) still pending; run: $0 wait" >&2
            exit 0 ;;
-      204) ;;
+      204) n=$(expired o); [ -z "$n" ] || timedout $n ;; # checked after a poll, so an answer that beat the deadline wins
       404) gone ;;
       *) die "answer poll failed ($CODE): $BODY" ;;
     esac
@@ -248,6 +296,11 @@ case "$CMD" in
     send nowait || pending "Queued. The user has not opened the link yet. Give them: $(link)"
     pending "Sent. Add more with add, or run wait for the answer." ;;
   join) join "${2:-}"; answer ;;
+  say)
+    shift
+    say "$@"
+    send nowait || { echo "Queued: it shows once the user opens the link."; exit 0; }
+    echo "Said." ;;
   wait) answer ;;
   version) echo "$VERSION" ;;
   close)
@@ -258,6 +311,7 @@ case "$CMD" in
 usage: $0 ask <questions.json | ->   send a question, print the answer JSON
        $0 add <questions.json | ->   append questions to the open form without waiting
        $0 join <agent link>          join a session the user started, print their opening note
+       $0 say <text>                 show a one-way update on the user's page
        $0 wait                       keep waiting after PENDING
        $0 close                      end the session
        $0 version                    print the client version

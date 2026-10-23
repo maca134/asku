@@ -35,6 +35,7 @@ Below, `ask` means whichever script you use.
 | `ask ask <file.json>` | Send a question form (`-` reads stdin, `ask.sh` only) |
 | `ask add <file.json>` | Append questions to the open form (or open one) without waiting |
 | `ask join <link>` | Join a session the user started on asku.dev; returns their opening note |
+| `ask say "<text>"` | Show a one-way update on the user's page (markdown); never answered |
 | `ask wait` | Keep waiting for the answer after `PENDING` |
 | `ask close` | End the session and purge it from the relay |
 | `ask version` | Print the client version |
@@ -67,6 +68,9 @@ If the user pastes a link like `https://asku.dev/j/<id>#…`, run `ask join '<li
 
 Sessions are named by `ASKU_SESSION` (default `default`). Use a different name to run separate conversations at once.
 
+**Status updates.** While a session is open, `ask say "Tests 42/50 passing"` posts a line to a feed on the user's page
+and exits `0` at once. Use it for progress on long work between questions; keep it to milestones, not every step.
+
 ## Question format
 
 ```json
@@ -93,6 +97,11 @@ Sessions are named by `ASKU_SESSION` (default `default`). Use a different name t
 - Options are strings, or `{value, label?, md?}`.
 - `md` (markdown) works on the form, each question and each option: use it for context, diffs, tables.
 - `required: true` forces an answer; anything else can be skipped.
+- `deadline` (seconds, on the form): the page counts down, and when time runs out `wait` returns a `timeout` answer
+  instead of waiting forever. Use it when you can go ahead without the user; say what you'll do in `md`
+  ("If you don't answer in 10 min, I'll deploy to staging"), then do it.
+- `mood` (on the form): `confident`, `excited`, `nervous`, `begging`, `grumpy` or `sheepish`. Changes the form's look.
+  Optional and just for fun; `nervous` suits risky actions.
 - Unknown fields are rejected. Full schema: https://asku.dev/schema.json
 
 ## Answer format
@@ -112,6 +121,8 @@ Sessions are named by `ASKU_SESSION` (default `default`). Use a different name t
 - `comments`: free text the user attached to a question. Read them, they often change the answer.
 - `note`: free text for the whole form.
 - `seqs`: which batches this answer covers (the client uses it; you can ignore it).
+- `delegated`: questions the user left to you ("Let the agent decide"). Pick sensibly and say what you chose.
+- `timeout: true`: the `deadline` passed with no answer; `skipped` lists the questions. Go ahead with your fallback.
 - `declined: true`: the user chose not to answer and only wrote a `note` saying why. Read it before asking again.
 - `error`: present instead if the browser rejected your form as invalid. Fix it and `ask` again. For an appended batch, only that batch was dropped: fix it and `add` it again.
 
