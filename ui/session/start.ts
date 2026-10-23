@@ -19,15 +19,15 @@ export function startCard() {
     btn.disabled = true;
     try {
       const b = await newKeyPair();
-      const pubB = b.pub.toBase64();
-      const res = await post("/s", { pub: pubB, role: "browser" });
+      const browserPub = b.pub.toBase64();
+      const res = await post("/s", { pub: browserPub, role: "browser" });
       if (!res.ok) throw new Error(res.status === 429 ? "too many new sessions from this network, try again later" : `relay said ${res.status}`);
       const { sid, key } = await res.json();
-      const st: State = { priv: b.priv, key, answered: [], pubB, T: crypto.getRandomValues(new Uint8Array(16)).toHex(), note: note.value.trim() };
-      await save(sid, st);
+      const state: State = { priv: b.priv, key, answered: [], browserPub, token: crypto.getRandomValues(new Uint8Array(16)).toHex(), note: note.value.trim() };
+      await save(sid, state);
       history.replaceState(null, "", `/a/${sid}`);
       scrollTo(0, 0);
-      await waitForAgent(sid, st);
+      await waitForAgent(sid, state);
     } catch (x) {
       err.textContent = `Could not start: ${(x as Error).message}`;
       btn.disabled = false;
@@ -36,9 +36,9 @@ export function startCard() {
   return form;
 }
 
-export async function waitForAgent(sid: string, st: State) {
-  const token = Uint8Array.fromHex(st.T!);
-  const link = `${location.origin}/j/${sid}#${await fragmentFor(Uint8Array.fromBase64(st.pubB!), token)}`;
+export async function waitForAgent(sid: string, state: State) {
+  const token = Uint8Array.fromHex(state.token!);
+  const link = `${location.origin}/j/${sid}#${await fragmentFor(Uint8Array.fromBase64(state.browserPub!), token)}`;
   show(h("section", { className: "panel" },
     h("div", { className: "state-icon agent" }, icon("link")),
     h("h1", { textContent: "Give this link to your agent" }),
@@ -56,9 +56,9 @@ export async function waitForAgent(sid: string, st: State) {
         drop(sid);
         return status("error", "This session is not safe", "Something other than your agent used the link. Start a new one.", startNew());
       }
-      const keys = await deriveKeys(st.priv, Uint8Array.fromBase64(pub));
-      await send(sid, keys, st, [0], { note: st.note ?? "" }); // the opening note is answer 0
-      const joined: State = { priv: st.priv, key: st.key, answered: st.answered, pubA: pub };
+      const keys = await deriveKeys(state.priv, Uint8Array.fromBase64(pub));
+      await send(sid, keys, state, [0], { note: state.note ?? "" }); // the opening note is answer 0
+      const joined: State = { priv: state.priv, key: state.key, answered: state.answered, agentPub: pub };
       await save(sid, joined);
       return listen(sid, keys, joined);
     }

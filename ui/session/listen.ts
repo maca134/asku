@@ -9,12 +9,12 @@ import type { Question } from "../types";
 import { send } from "./send";
 import { drop, save, type State } from "./storage";
 
-export function listen(sid: string, keys: Keys, st: State) {
+export function listen(sid: string, keys: Keys, state: State) {
   status("wait", "Connected", "Waiting for the agent's question. This page updates by itself, keep it open.");
   const es = new EventSource(`/s/${sid}/q`);
   const born = Date.now(); // batches in the first moments are replays after a reload: no ping
-  if (!st.start) { st.start = born; save(sid, st); }
-  clock(st.start);
+  if (!state.start) { state.start = born; save(sid, state); }
+  clock(state.start);
   let cur: Open | null = null;
   let later: Batch[] = []; // arrived while an answer was being sent: placed once it's done
   let chain: Promise<unknown> = Promise.resolve(); // decrypting and placing are async: keep batches in order
@@ -46,19 +46,19 @@ export function listen(sid: string, keys: Keys, st: State) {
     if ("say" in q) return void (validSay(q) && say(q.say)); // never answered; a bad one is just dropped
     const ok = validQuestion(q);
     if (ok && (q.name || (!sessName.textContent && q.title))) nameSession(q.name ?? q.title!); // no name yet: the first title will do
-    if (st.answered.includes(seq)) return void (ok && toFeed(event("check", `Answered: ${batchName(q)}`))); // replayed after a reload
+    if (state.answered.includes(seq)) return void (ok && toFeed(event("check", `Answered: ${batchName(q)}`))); // replayed after a reload
     if (cur?.sending) return void later.push([seq, q]);
     const target = cur;
     const problem = !validQuestion(q) ? (validQuestion as any).errors?.map((x: any) => `${x.instancePath || "/"} ${x.message}`).join("; ") ?? "invalid"
       : target ? clash(target.f, q) : null;
     if (problem) {
       // the batch is dropped; an open form stays as it is
-      await send(sid, keys, st, [seq], { seqs: [seq], answers: {}, skipped: [], comments: {}, note: "", error: `invalid question: ${problem}`.slice(0, 2000) }).catch(() => {});
+      await send(sid, keys, state, [seq], { seqs: [seq], answers: {}, skipped: [], comments: {}, note: "", error: `invalid question: ${problem}`.slice(0, 2000) }).catch(() => {});
       if (cur) return;
       return status("error", "This question can't be shown", "The agent sent a form this page doesn't understand. It has been told; wait for a corrected one.", live("Waiting for the agent…"));
     }
     if (cur) cur.add([seq, q]);
-    else cur = render(sid, keys, st, [[seq, q]], done);
+    else cur = render([[seq, q]], (seqs, a) => send(sid, keys, state, seqs, a), done);
     if (Date.now() - born > 1500) ping(q.mood);
   };
   es.addEventListener("q", (e) => queue(() => onQ(Number(e.lastEventId), e.data)));

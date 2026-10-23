@@ -11,10 +11,10 @@ export const post = (path: string, body: unknown, key?: string) =>
 
 // ---- session
 // One answer can cover several batches: it goes under the newest, and says which in its `seqs`.
-export async function send(sid: string, keys: Keys, st: State, seqs: number[], a: Answer | { note: string }) {
-  const res = await post(`/s/${sid}/a`, await seal(keys, sid, "a", Math.max(...seqs), JSON.stringify(a)), st.key);
+export async function send(sid: string, keys: Keys, state: State, seqs: number[], a: Answer | { note: string }) {
+  const res = await post(`/s/${sid}/a`, await seal(keys, sid, "a", Math.max(...seqs), JSON.stringify(a)), state.key);
   // duplicate: a retry of an answer the relay already has
   if (res.status !== 204 && !(res.status === 409 && (await res.json().catch(() => ({}))).error === "duplicate")) throw new Error(`relay said ${res.status}`);
-  st.answered.push(...seqs);
-  await save(sid, st);
+  state.answered.push(...seqs);
+  await save(sid, state);
 }

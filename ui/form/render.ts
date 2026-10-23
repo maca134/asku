@@ -1,9 +1,7 @@
 // The open form on the answer page: batches, deadlines, and sending.
-import type { Keys } from "../../shared/crypto";
+// It never sees keys: the caller's send() encrypts.
 import { h, icon } from "../dom";
 import { batchName, event, hms, live, show, stateEl, tabTitle, toFeed, waiting, WORKING } from "../page";
-import { send } from "../session/send";
-import type { State } from "../session/storage";
 import type { Answer, Question } from "../types";
 import { buildForm } from "./form";
 
@@ -18,7 +16,7 @@ export type Open = { f: ReturnType<typeof buildForm>; sending: boolean; add: (b:
 
 // Shows a form for one or more batches. Later batches go under it, with a chip pointing at them; with more than one
 // open, each batch can be sent on its own, and the main button sends the rest.
-export function render(sid: string, keys: Keys, st: State, batches: Batch[], done: () => void): Open {
+export function render(batches: Batch[], send: (seqs: number[], a: Answer) => Promise<void>, done: () => void): Open {
   const [[seq, q], ...rest] = batches;
   const f = buildForm(q);
   const li = h("li", { className: "open" }, f.form);
@@ -113,7 +111,7 @@ export function render(sid: string, keys: Keys, st: State, batches: Batch[], don
     busy(true);
     try {
       const seqs = ps.map((p) => p.seq);
-      await send(sid, keys, st, seqs, { seqs, ...a });
+      await send(seqs, { seqs, ...a });
       if (all) {
         seen.disconnect();
         li.replaceWith(event("check", `${declined ? "Declined" : "Answered"}: ${names.join(" · ")}`));
