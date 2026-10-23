@@ -91,7 +91,7 @@ Answer shape: `{ "answers": { "<id>": value }, "skipped": [], "comments": { "<id
 Unanswered optional questions go in `skipped`. Questions the user hands back with "Let the agent decide" go in `delegated`. If a question fails schema validation in the browser, the agent gets back `{ …, "error": "invalid question: …" }` instead.
 - `deadline` (seconds) on a form: the page counts down and locks the batch at zero. The client stops waiting then and prints `{ "seqs": […], "answers": {}, "skipped": [<its ids>], …, "timeout": true }`. When the client queues the batch it adds `sent` (unix seconds), so the page counts from when the agent asked, not from when the page opened. Queue numbers can have gaps after a timeout; the client numbers messages on the wire from the last one it sent.
 - `mood` on a form changes how the page looks (`confident`, `excited`, `nervous`, `begging`, `grumpy`, `sheepish`).
-- A `say` message `{ "say": "<markdown>" }` is a one-way update shown in the page's feed. It takes a question seq but is never answered.
+- A `say` message `{ "say": "<markdown>" }` is a one-way update shown in the page's feed. It takes a question seq but is never answered. With `"progress": { "done": n, "total": m }` (`0 <= n <= m`, `m >= 1`) it is a progress bar labelled by `say`; a later one with the same `say` moves that bar.
 - The other way, the user can write to the agent at any time from the page, `{ "message": "…" }`, or press STOP, `{ "stop": true }` (`dir` `m`, shown in the feed too). The client prints each on the agent's next `ask`, `add`, `say` or `wait`, once.
 - When a new question arrives, the page vibrates (where the browser supports it) and can beep if the user turns on the bell.
 Plaintext shapes are defined in [`schema.json`](schema.json).
@@ -107,6 +107,7 @@ ask.sh ask <questions.json | ->   # ask.ps1 ask <questions.json>
 ask.sh add <questions.json | ->   # append to the open form without waiting
 ask.sh join <agent link>          # session the user started on the website; prints {"note": …}
 ask.sh say <text>                 # one-way update on the page; queued until the user opens the link
+ask.sh say <label> --progress 42/50  # a progress bar; the same label moves the same bar
 ask.sh wait
 ask.sh close
 ask.sh version                    # client version, same in both scripts

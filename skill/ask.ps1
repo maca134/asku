@@ -1,7 +1,7 @@
 # asku agent client. PowerShell 5.1 + .NET Framework only. Keep this file ASCII: PS 5.1 reads BOM-less files as ANSI.
 param([string]$Command, [string]$File)
 $ErrorActionPreference = 'Stop'
-$Version = '1.4.0' # keep in step with ask.sh
+$Version = '1.5.0' # keep in step with ask.sh
 
 function ConvertTo-AskuHex([byte[]]$Bytes) { [BitConverter]::ToString($Bytes).Replace('-', '').ToLower() }
 
@@ -252,11 +252,24 @@ function Add-AskuBatch([string]$File) {
     if ($fresh) { Pending "Give the user this link: $(Get-Link)" }
 }
 
-# A one-way update for the page's feed. Queued until the user opens the link; never answered.
-function Add-AskuSay([string]$Text) {
+# A one-way update for the page's feed, or with --progress <done>/<total> a progress bar labelled by the text.
+# Queued until the user opens the link; never answered.
+function Add-AskuSay([string[]]$Words) {
     if (-not (Test-Path (Join-Path $S 'sid'))) { Fail 'no session; say only works while a form is open or after join' }
-    if (-not $Text) { Fail 'say needs some text' }
-    [IO.File]::WriteAllText((Join-Path $S "q$(Get-AskuNextSeq).json"), (@{ say = $Text } | ConvertTo-Json -Compress))
+    $text = @(); $progress = $null
+    for ($i = 0; $i -lt $Words.Count; $i++) {
+        if ($Words[$i] -ne '--progress') { $text += $Words[$i]; continue }
+        $i++
+        if (-not ($Words[$i] -match '^(\d+)/(\d+)$') -or [long]$Matches[1] -gt [long]$Matches[2] -or [long]$Matches[2] -lt 1) {
+            Fail '--progress needs <done>/<total>, 0 <= done <= total, total >= 1'
+        }
+        $progress = [ordered]@{ done = [long]$Matches[1]; total = [long]$Matches[2] }
+    }
+    $text = ($text | Where-Object { $_ }) -join ' '
+    if (-not $text) { Fail 'say needs some text' }
+    $message = [ordered]@{ say = $text }
+    if ($progress) { $message.progress = $progress }
+    [IO.File]::WriteAllText((Join-Path $S "q$(Get-AskuNextSeq).json"), ($message | ConvertTo-Json -Compress))
 }
 
 # Waits for the bind (or checks it once with -NoWait), then sends the queued batches. Returns the keys, or $null if not bound yet.
@@ -369,6 +382,7 @@ usage: $Self ask <questions.json>   send a question, print the answer JSON
        $Self add <questions.json>   append questions to the open form without waiting
        $Self join <agent link>      join a session the user started, print their opening note
        $Self say "<text>"           show a one-way update on the user's page
+         [--progress <done>/<total>]  as a progress bar labelled <text>; same label, same bar
        $Self wait                   keep waiting after PENDING
        $Self close                  end the session
        $Self version                print the client version
@@ -392,7 +406,7 @@ switch ($Command) {
     }
     'join' { Join-AskuSession $File; Wait-Asku }
     'say' {
-        Add-AskuSay $File
+        Add-AskuSay (@($File) + $args)
         $c = Send-Asku -NoWait
         if (-not $c) { [Console]::Out.Write("Queued: it shows once the user opens the link.`n"); exit 0 }
         Show-AskuInbox $c

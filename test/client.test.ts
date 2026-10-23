@@ -297,17 +297,23 @@ for (const c of clients) {
       expect(res.out).toContain("Said");
       expect(await b.question(1)).toEqual({ say: "queued" }); // the timed-out batch never went out, so no gap
       expect(await b.question(2)).toEqual({ say: text });
+      res = await run(["say", "Tests", "--progress", "42/50"]);
+      expect(res.code).toBe(0);
+      expect(await b.question(3)).toEqual({ say: "Tests", progress: { done: 42, total: 50 } });
+      for (const bad of ["51/50", "1/0", "-1/5", "x"])
+        expect((await run(["say", "Tests", "--progress", bad])).code).toBe(1);
+      expect((await run(["say", "--progress", "1/2"])).code).toBe(1); // a bar needs a label
       const before = Math.floor(Date.now() / 1000);
       res = await run(["wait"]);
       expect(res.code).toBe(1); // a say is never answered
       await run(["add", late]);
-      const q = await b.question(3);
+      const q = await b.question(4);
       expect(q.deadline).toBe(2);
       expect(q.mood).toBe("nervous");
       expect(q.sent).toBeGreaterThanOrEqual(before);
       res = await run(["wait"]);
       expect(JSON.parse(res.out).timeout).toBe(true);
-      await b.answer(3, { answers: { x: true }, skipped: [], comments: {}, note: "" }); // too late: nobody is listening
+      await b.answer(4, { answers: { x: true }, skipped: [], comments: {}, note: "" }); // too late: nobody is listening
       expect((await run(["wait"])).code).toBe(1);
 
       expect((await run(["close"])).code).toBe(0);

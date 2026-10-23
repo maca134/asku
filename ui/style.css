@@ -2155,6 +2155,38 @@ details.comment textarea {
   border: 1px solid var(--line);
   border-radius: 0.75em;
 }
+.feed > .moved {
+  animation: none;
+}
+.meter-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  margin-top: 0.35em;
+}
+.meter-row progress {
+  flex: 1;
+  min-width: 0;
+  height: 0.5em;
+  accent-color: var(--accent);
+}
+.meter-count {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.meter.complete .meter-count {
+  font-weight: 600;
+  color: var(--ok);
+}
+.meter-count .icon {
+  width: 1.1em;
+  height: 1.1em;
+  stroke-width: 2.4;
+}
 .feed > .open {
   margin: 0.5em 0;
 }

@@ -3,7 +3,7 @@
 # ponytail: LibreSSL (macOS /usr/bin/openssl) lacks `dgst -macopt hexkey`; hand-rolled HMAC if macOS agents matter.
 set -euo pipefail
 
-VERSION=1.4.0 # keep in step with ask.ps1
+VERSION=1.5.0 # keep in step with ask.ps1
 
 SPKI_P256=3059301306072a8648ce3d020106082a8648ce3d030107034200
 
@@ -216,13 +216,25 @@ add() {
   [ -z "$fresh" ] || pending "Give the user this link: $(link)"
 }
 
-# say <text...>: a one-way update for the page's feed. Queued until the user opens the link; never answered.
+# say [--progress <done>/<total>] <text...>: a one-way update for the page's feed, or a progress bar labelled <text>.
+# Queued until the user opens the link; never answered.
 say() {
   [ -f "$S/sid" ] || die "no session; say only works while a form is open or after join"
-  [ $# -gt 0 ] && [ -n "$*" ] || die "say needs some text"
-  local t="$*"
+  local words=() progress=
+  while [ $# -gt 0 ]; do
+    if [ "$1" = --progress ]; then
+      [[ ${2:-} =~ ^([0-9]+)/([0-9]+)$ ]] && (( 10#${BASH_REMATCH[1]} <= 10#${BASH_REMATCH[2]} && 10#${BASH_REMATCH[2]} >= 1 )) \
+        || die "--progress needs <done>/<total>, 0 <= done <= total, total >= 1"
+      progress=$(printf ',"progress":{"done":%d,"total":%d}' "$((10#${BASH_REMATCH[1]}))" "$((10#${BASH_REMATCH[2]}))")
+      shift 2
+    else
+      words+=("$1"); shift
+    fi
+  done
+  local t="${words[*]-}"
+  [ -n "$t" ] || die "say needs some text"
   t=${t//\\/\\\\}; t=${t//\"/\\\"}; t=${t//$'\n'/\\n}; t=${t//$'\r'/\\r}; t=${t//$'\t'/\\t}
-  printf '{"say":"%s"}' "$t" | tr -d '\000-\010\013\014\016-\037' > "$S/q$(next_seq).json"
+  printf '{"say":"%s"%s}' "$t" "$progress" | tr -d '\000-\010\013\014\016-\037' > "$S/q$(next_seq).json"
 }
 
 # send [nowait]: waits for the bind (or checks it once), then sends the queued batches. Returns 1 if not bound yet.
@@ -344,6 +356,7 @@ usage: $0 ask <questions.json | ->   send a question, print the answer JSON
        $0 add <questions.json | ->   append questions to the open form without waiting
        $0 join <agent link>          join a session the user started, print their opening note
        $0 say <text>                 show a one-way update on the user's page
+         [--progress <done>/<total>]  as a progress bar labelled <text>; same label, same bar
        $0 wait                       keep waiting after PENDING
        $0 close                      end the session
        $0 version                    print the client version
