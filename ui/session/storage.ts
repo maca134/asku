@@ -12,16 +12,27 @@ export type State = {
   browserPub?: string;
   token?: string;
   note?: string;
+  name?: string;
 };
 
-const database = new Promise<IDBDatabase>((resolve, reject) => {
-  const opening = indexedDB.open("asku", 1);
-  opening.onupgradeneeded = () => opening.result.createObjectStore("s");
-  opening.onsuccess = () => resolve(opening.result);
-  opening.onerror = () => reject(opening.error);
-});
+export function rename(state: State, name: string | undefined) {
+  if (!name || state.name === name) return false;
+  state.name = name;
+  return true;
+}
+
+let database: Promise<IDBDatabase> | undefined;
+
+const connect = () =>
+  new Promise<IDBDatabase>((resolve, reject) => {
+    const opening = indexedDB.open("asku", 1);
+    opening.onupgradeneeded = () => opening.result.createObjectStore("s");
+    opening.onsuccess = () => resolve(opening.result);
+    opening.onerror = () => reject(opening.error);
+  });
 
 async function run<T>(mode: IDBTransactionMode, request: (store: IDBObjectStore) => IDBRequest<T>) {
+  database ??= connect();
   const db = await database;
   return new Promise<T>((resolve, reject) => {
     const pending = request(db.transaction("s", mode).objectStore("s"));
