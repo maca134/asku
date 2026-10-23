@@ -118,7 +118,7 @@ async function vapidKeys() {
 
 const local = /^https:\/\/localhost:\d+\//;
 
-test("a new question pushes only the sid, signed with the relay's VAPID key", async () => {
+test("a new question pushes only its sid and seq, signed with the relay's VAPID key", async () => {
   const { vapid, verifier } = await vapidKeys();
   const { call, session } = start({ vapid, pushServices: local });
   const service = await pushService();
@@ -129,7 +129,7 @@ test("a new question pushes only the sid, signed with the relay's VAPID key", as
   expect((await call("POST", `/s/${sid}/q`, question(1), agentKey)).status).toBe(204);
   const delivery = await service.next();
   expect(delivery.headers.get("content-encoding")).toBe("aes128gcm");
-  expect(JSON.parse(await service.decrypt(new Uint8Array(await delivery.arrayBuffer())))).toEqual({ sid });
+  expect(JSON.parse(await service.decrypt(new Uint8Array(await delivery.arrayBuffer())))).toEqual({ sid, seq: 1 });
 
   const [, token, key] = delivery.headers.get("authorization")!.match(/^vapid t=([\w.-]+), k=([\w-]+)$/)!;
   expect(key).toBe(vapid.publicKey);

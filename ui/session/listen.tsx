@@ -112,6 +112,14 @@ export function listen(session: Session) {
     );
   };
 
+  navigator.serviceWorker?.addEventListener("message", ({ data }) => {
+    const seq = data?.answered;
+    if (data?.sid !== sid || !Number.isSafeInteger(seq)) return;
+    queue(async () => {
+      if (!state.answered.includes(seq)) state.answered.push(seq);
+      current?.answeredElsewhere(seq);
+    });
+  });
   events.addEventListener("q", (event) => queue(() => receive(Number(event.lastEventId), event.data)));
   events.addEventListener("close", () => {
     events.close();

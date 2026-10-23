@@ -290,7 +290,7 @@ export function relay({
       return fail(409, "duplicate"); // lost a race with an identical seq
     }
     notify(sid);
-    if (direction === "q") pushQuestion(session);
+    if (direction === "q") pushQuestion(session, seq);
     return empty();
   }
 
@@ -306,10 +306,10 @@ export function relay({
     return empty();
   }
 
-  // The push carries only the sid, which the relay already knows; the browser looks up the session's name itself.
-  function pushQuestion({ sid, push }: Session) {
+  // The push carries only the sid and seq, which the relay already knows; the browser fetches and opens the batch.
+  function pushQuestion({ sid, push }: Session, seq: number) {
     if (!vapid || !push) return;
-    sendPush(vapid, JSON.parse(push), JSON.stringify({ sid }))
+    sendPush(vapid, JSON.parse(push), JSON.stringify({ sid, seq }))
       .then((status) => {
         if (status === 404 || status === 410) sql.setPush.run(null, sid); // the browser unsubscribed
       })
