@@ -1,3 +1,16 @@
+## Project
+
+asku: an agent sends the user an end-to-end encrypted question form; the relay only ever stores ciphertext.
+Follow `docs/coding-standards.md`: it covers layout, the key/plaintext boundary, names, comments and tooling.
+
+- `api/` relay (Bun + SQLite), `shared/crypto.ts` wire crypto, `ui/` browser app (`session/` is the trusted part),
+  `skill/` the agent clients and SKILL.md.
+- `bun run build` first: it generates `ui/gen/` (schema validator and its types), which typecheck and the app need.
+- Before committing: `bun run check`, `bun run typecheck`, `bun test`.
+- Changing `ui/session/` or `ui/form/`: also run the `e2e-local` skill (`.claude/skills/e2e-local/SKILL.md`).
+- Wire-format or crypto changes go in all of `shared/crypto.ts`, `skill/ask.sh`, `skill/ask.ps1`, `test/vectors.json`
+  and the README's Crypto section together.
+
 ## Agent skills
 
 ### Issue tracker

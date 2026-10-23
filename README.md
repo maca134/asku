@@ -25,7 +25,7 @@ It saves the skill and one script for your OS. Next time it needs a decision, it
 
 ## Protocol
 
-**Reviewing for privacy?** The code that touches keys or plaintext is [`shared/crypto.ts`](shared/crypto.ts), [`ui/session/`](ui/session) (key storage, binding, encrypt/decrypt) and the agent clients [`skill/ask.sh`](skill/ask.sh) / [`skill/ask.ps1`](skill/ask.ps1). The relay ([`api/`](api)) only stores ciphertext; the rest of [`ui/`](ui) is UI and never sees keys.
+**Reviewing for privacy?** The code that touches keys or plaintext is [`shared/crypto.ts`](shared/crypto.ts), [`ui/session/`](ui/session) (key storage, binding, encrypt/decrypt) and the agent clients [`skill/ask.sh`](skill/ask.sh) / [`skill/ask.ps1`](skill/ask.ps1). The relay ([`api/`](api)) only stores ciphertext; the rest of [`ui/`](ui) is UI and never sees keys. Conventions: [`docs/coding-standards.md`](docs/coding-standards.md).
 
 ### Hard requirements
 - Agent side: no installs beyond what the OS usually ships, no daemon. `ask.sh` needs bash, curl, OpenSSL ≥ 1.1.1 and coreutils; `ask.ps1` needs only PowerShell 5.1 + .NET Framework.

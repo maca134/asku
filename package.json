@@ -8,6 +8,7 @@
     "start": "bun api/relay.ts",
     "test": "bun test",
     "typecheck": "tsc -p .",
+    "check": "biome check .",
     "vectors": "bun test/gen-vectors.ts > test/vectors.json"
   },
   "devDependencies": {
