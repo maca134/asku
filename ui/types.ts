@@ -3,8 +3,15 @@ export type Option = string | { value: string; label?: string; md?: string };
 
 type Base = { id: string; label: string; md?: string; required?: boolean };
 export type ConfirmItem = Base & { type: "confirm"; default?: boolean };
-export type SingleItem = Base & { type: "single"; options: Option[]; default?: string };
-export type MultiItem = Base & { type: "multi"; options: Option[]; default?: string[]; min?: number; max?: number };
+export type SingleItem = Base & { type: "single"; options: Option[]; default?: string; other?: boolean };
+export type MultiItem = Base & {
+  type: "multi";
+  options: Option[];
+  default?: string[];
+  min?: number;
+  max?: number;
+  other?: boolean;
+};
 export type TextItem = Base & {
   type: "text";
   default?: string;

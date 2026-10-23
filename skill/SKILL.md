@@ -96,8 +96,11 @@ and exits `0` at once. Use it for progress on long work between questions; keep 
 - `questions`: 1 to 50 items. `id` matches `[A-Za-z0-9_-]{1,64}`, `label` is required.
 - Types and their extra fields:
   - `confirm`: yes/no. `default` boolean.
-  - `single`: pick one. `options` required, `default` string.
-  - `multi`: pick several. `options` required, `default` string[], `min`, `max`.
+  - `single`: pick one. `options` required, `default` string, `other`.
+  - `multi`: pick several. `options` required, `default` string[], `min`, `max`, `other`.
+- `other: true` (single/multi) adds an "Other" option with a text box. The typed text comes back as a plain value
+  (the string for `single`, one more item in the array for `multi`, counted toward `min`/`max`). A `default` that
+  matches no option pre-fills the box.
   - `text`: `default`, `placeholder`, `multiline`, `maxLength`.
   - `number`: `default`, `min`, `max`, `step`.
 - Prefer `confirm`/`single`/`multi` over `text`: they're quicker to answer on a phone.
@@ -127,7 +130,8 @@ and exits `0` at once. Use it for progress on long work between questions; keep 
 }
 ```
 
-- `answers`: confirm → boolean, single/text → string, multi → string[], number → number.
+- `answers`: confirm → boolean, single/text → string, multi → string[], number → number. A write-in
+  ("Other") is just a value that matches none of your options.
 - `skipped`: optional questions the user left blank.
 - `comments`: free text the user attached to a question. Read them, they often change the answer.
 - `note`: free text for the whole form.
