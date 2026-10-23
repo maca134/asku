@@ -106,11 +106,13 @@ function nameSession(name: string) {
   sessName.textContent = sessName.title = name;
   if (!document.title.startsWith("●")) document.title = tabTitle();
 }
+// seconds as m:ss, or h:mm:ss
+const hms = (s: number) => {
+  const hr = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
+  return `${hr ? `${hr}:${String(m).padStart(2, "0")}` : m}:${String(s % 60).padStart(2, "0")}`;
+};
 function clock(start: number) {
-  const tick = () => {
-    const s = Math.floor((Date.now() - start) / 1000), hr = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
-    sessTime.textContent = `${hr ? `${hr}:${String(m).padStart(2, "0")}` : m}:${String(s % 60).padStart(2, "0")}`;
-  };
+  const tick = () => { sessTime.textContent = hms(Math.floor((Date.now() - start) / 1000)); };
   tick();
   setInterval(tick, 1000);
 }
@@ -462,8 +464,7 @@ function render(sid: string, keys: Keys, st: State, batches: Batch[], done: () =
       if (!el.isConnected) return clearInterval(t); // sent, or the form is gone
       const left = Math.ceil((end - Date.now()) / 1000);
       if (left > 0) {
-        const [hh, mm, ss] = [Math.floor(left / 3600), Math.floor(left / 60) % 60, left % 60];
-        el.lastChild!.textContent = `The agent decides without you in ${hh ? `${hh}:${String(mm).padStart(2, "0")}` : mm}:${String(ss).padStart(2, "0")}`;
+        el.lastChild!.textContent = `The agent decides without you in ${hms(left)}`;
         el.classList.toggle("soon", left <= 60);
       } else if (!o.sending) {
         clearInterval(t);
@@ -640,8 +641,8 @@ function landing() {
 
   const controls = h("section", { className: "sec sec-alt" }, h("div", { className: "wrap" }, h("div", { className: "split" },
     h("div", { className: "split-copy" },
-      sub("The form", "Built for answering with one thumb", "Agents get five controls, markdown for context, and a comment box on every question. Try it: this is the real form, and the panel shows exactly what your agent would receive."),
-      h("ul", { className: "chips" }, ...["Yes / no", "Pick one", "Pick several", "Text", "Number", "Markdown", "Comments", "Note"].map((c) => h("li", { textContent: c })))),
+      sub("The form", "Built for answering with one thumb", "Agents get five controls, markdown for context, deadlines and moods. Every question takes a comment, or can be left to the agent. Try it: this is the real form, and the panel shows exactly what your agent would receive."),
+      h("ul", { className: "chips" }, ...["Yes / no", "Pick one", "Pick several", "Text", "Number", "Markdown", "Comments", "Let the agent decide", "Deadlines", "Moods", "Note"].map((c) => h("li", { textContent: c })))),
     showcase())));
 
   const faq = h("section", { className: "sec" }, h("div", { className: "wrap narrow" },
@@ -716,7 +717,7 @@ function landing() {
       h("a", { href: "/terms", textContent: "Terms" }))));
 
   const missing = h("section", { className: "sec" }, h("div", { className: "wrap narrow" }, stateEl("error", "Page not found", "There's nothing at this address."), next("Go home", "/")));
-  const body = { "/": [hero], "/how": [how, controls, faq], "/security": [security], "/demo": [demos], "/install": [install], "/start": [start], "/terms": [terms] }[path] ?? [missing];
+  const body = { "/": [hero], "/how": [how, controls, faq], "/security": [security], "/demo": [demos, controls], "/install": [install], "/start": [start], "/terms": [terms] }[path] ?? [missing];
   document.title = PAGES[path]?.title ?? "Not found · asku";
   app.replaceChildren(header, h("main", { className: "landing" }, ...body), footer);
 }
@@ -896,9 +897,21 @@ function phone(url: Node, screen: HTMLElement, ...over: Kid[]) {
       screen, ...over));
 }
 
+// A deadline's countdown above the first question, as on the answer page, on a pretend clock that never runs out.
+function countdown(f: ReturnType<typeof buildForm>, secs: number, alive: () => boolean, moving = () => true) {
+  const text = () => `The agent decides without you in ${hms(secs)}`;
+  const span = h("span", { textContent: text() });
+  f.fields[0].el.before(h("p", { className: "countdown" }, icon("clock"), span));
+  const t = setInterval(() => {
+    if (!alive()) return clearInterval(t);
+    if (moving() && secs > 1) { secs--; span.textContent = text(); }
+  }, 1000);
+}
+
 // The real form, lightly interactive, next to the JSON it would send.
 function showcase() {
-  const f = buildForm(example as Question);
+  const f = buildForm({ ...example, mood: "confident" } as Question);
+  countdown(f, 1800, () => true);
   const out = h("pre", { className: "json", ariaLive: "polite", ariaLabel: "Answer JSON" });
   const update = () => out.replaceChildren(...jsonNodes(f.collect(false).a));
   f.form.addEventListener("input", update);
@@ -926,10 +939,10 @@ const CLAUDE: Cli = { id: "claude", title: "claude — ~/shop", say: "● ", too
 const CODEX: Cli = { id: "codex", title: "codex — ~/shop", say: "• ", tool: "• ", run: (c) => `Ran ${c}` };
 const GEMINI: Cli = { id: "gemini", title: "gemini — ~/shop", say: "✦ ", tool: "✔ ", run: (c) => `Shell ${c}` };
 
-// One demo run: what you ask, the form, an optional `ask add` follow-up, your taps on the phone, and what the agent does next.
-type Act = ["pick", string, string] | ["up", string, number] | ["comment", string, string] | ["text", string, string];
+// One demo run: what you ask, the form, an optional `ask say` update and `ask add` follow-up, your taps on the phone, and what the agent does next.
+type Act = ["pick", string, string] | ["up", string, number] | ["comment", string, string] | ["text", string, string] | ["dice", string, ""];
 type Scene = {
-  name: string; cli: Cli; cap: string; you: string; intro: string; file: string; q: Question;
+  name: string; cli: Cli; cap: string; you: string; intro: string; file: string; q: Question; say?: string;
   add?: { say: string; file: string; q: Question }; acts: Act[]; after: string; cmd: string; done: string;
 };
 const DEPLOY: Scene = {
@@ -941,13 +954,14 @@ const DEPLOY: Scene = {
 };
 const SCENES: Scene[] = [
   {
-    ...DEPLOY, cli: CLAUDE, cap: "In Claude Code: sign-off before it ships, with a question added while you answer.",
+    ...DEPLOY, cli: CLAUDE, cap: "In Claude Code: sign-off before it ships, a progress update with `say`, and a question added while you answer.",
+    q: { ...example, mood: "confident" } as Question, say: "Build is green: **214** tests passed",
     add: { say: "One more thing while you're in there.", file: "notify.json", q: { title: "Afterwards", questions: [{ id: "notify", type: "confirm", label: "Post in #releases when it's live?" }] } },
     acts: [...DEPLOY.acts, ["pick", "notify", "yes"]],
     after: "Approved: Production, 25% canary, after lint and test. You noted Fridays, so I'll hold it at 25% and post in #releases.",
   },
   {
-    name: "Plan a feature", cli: CODEX, cap: "In Codex CLI: the design gets settled up front, so nothing is built on a guess.",
+    name: "Plan a feature", cli: CODEX, cap: "In Codex CLI: the design gets settled up front, and what you don't mind you leave to the agent.",
     you: "Add CSV export to the reports page. I'm in meetings all afternoon, ask me what you need.",
     intro: "A few choices before I start building.", file: "export.json",
     q: { title: "CSV export", md: "Reports page, **14 columns**, up to 50k rows.", questions: [
@@ -958,15 +972,15 @@ const SCENES: Scene[] = [
     add: { say: "Spotted one more: amounts are stored in cents.", file: "amounts.json", q: { title: "Amounts", questions: [
       { id: "money", type: "single", label: "Show amounts as", options: [{ value: "decimal", label: "12.34" }, { value: "cents", label: "1234 (raw cents)" }] },
     ] } },
-    acts: [["pick", "cols", "status"], ["pick", "email", "yes"], ["comment", "email", "Send from reports@"], ["pick", "money", "decimal"]],
-    after: "Got it: current filters, 4 columns, decimal amounts, and big exports go out by email from reports@. Building it now.",
+    acts: [["pick", "cols", "status"], ["pick", "email", "yes"], ["comment", "email", "Send from reports@"], ["dice", "money", ""]],
+    after: "Got it: current filters, 4 columns, and big exports go out by email from reports@. You left amounts to me: decimals, as on the page. Building it now.",
     cmd: "npm test -- export", done: "12 passed: CSV export",
   },
   {
-    name: "Unblock a migration", cli: GEMINI, cap: "In Gemini CLI: a job left running hits a risky case and waits for your call.",
+    name: "Unblock a migration", cli: GEMINI, cap: "In Gemini CLI: a risky case waits for your call, with a deadline so the job can't stall all night.",
     you: "Migrate the users table to the new schema tonight. Don't guess on anything risky.",
     intro: "312 users share an email with another account. I need a call on these before I migrate.", file: "dupes.json",
-    q: { title: "Duplicate accounts", md: "**312** users share an email with another account.", questions: [
+    q: { title: "Duplicate accounts", mood: "nervous", deadline: 1800, md: "**312** users share an email with another account. No answer in 30 min and I'll skip them and migrate the rest.", questions: [
       { id: "merge", type: "single", label: "Merge each group into", options: [{ value: "recent", label: "Most recent login" }, { value: "oldest", label: "Oldest account" }, { value: "skip", label: "Skip them, migrate the rest" }] },
       { id: "snapshot", type: "confirm", label: "Snapshot the table first?" },
       { id: "batch", type: "number", label: "Batch size", min: 100, max: 5000, step: 100, default: 500 },
@@ -1083,6 +1097,9 @@ function demo(sc = DEPLOY) {
     scroller.replaceChildren(h("div", { className: "phone-idle" }, icon("bubble"), h("p", { textContent: "Waiting for a link from your agent" })));
     const f = buildForm(sc.q);
     const $ = (id: string, sel: string) => f.fields.find((x) => x.it.id === id)!.el.querySelector(sel) as HTMLInputElement;
+    const fd = h("ol", { className: "feed" }, h("li", { className: "open" }, f.form));
+    // stops on the next loop, or when the scene is switched
+    if (sc.q.deadline) countdown(f, sc.q.deadline, () => my === gen && root.isConnected, () => !paused && visible && !fast);
 
     await wait(700);
     const you = line("prompt", h("span", { className: "t-dim", textContent: "› " }));
@@ -1103,13 +1120,21 @@ function demo(sc = DEPLOY) {
       for (const ch of fast ? [DEMO_URL] : DEMO_URL.match(/.{1,4}/g)!) { url.textContent += ch; await wait(35); }
       scroller.replaceChildren(shell([stateEl("wait", "Verifying link…", "Checking the agent's key against the link.")], "div"));
       await wait(1100);
-      scroller.replaceChildren(shell([f.form], "div"));
+      scroller.replaceChildren(shell([fd], "div"));
       f.form.classList.add("enter");
       await wait(1100);
     };
     if (add) {
       say("Open this on your phone: ", h("span", { className: "t-link", textContent: `https://${DEMO_URL}#9f2c…e1a0` }));
       await openLink();
+      if (sc.say) {
+        out = await run(`bash ask.sh say "${sc.say.replaceAll("*", "")}"`);
+        await wait(300);
+        out("", "Said.");
+        fd.append(h("li", { className: "say" }, md(sc.say)));
+        await show(fd.lastChild as HTMLElement);
+        await wait(1200);
+      }
       say(add.say);
       await wait(500);
       out = await run(`bash ask.sh add ${add.file}`);
@@ -1127,6 +1152,7 @@ function demo(sc = DEPLOY) {
     for (const [kind, id, v] of sc.acts) {
       if (kind === "pick") await pick($(id, `input[value="${v}"]`));
       if (kind === "up") { const up = $(id, ".step-up"); for (let i = 0; i < v; i++) await press(up, () => up.click()); }
+      if (kind === "dice") { const d = $(id, ".dice"); await press(d, () => d.click()); }
       if (kind === "text") { const el = $(id, ".input"); await press(el, () => {}); await type(el, v, 16); }
       if (kind === "comment") {
         const det = $(id, "details") as unknown as HTMLDetailsElement;
