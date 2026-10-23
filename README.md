@@ -26,7 +26,7 @@ It saves the skill and one script for your OS. Next time it needs a decision, it
 ## Protocol
 
 ### Hard requirements
-- Agent side: zero deps, no daemon. `ask.sh` (curl + openssl) and `ask.ps1` (PowerShell 5.1 + .NET Framework only).
+- Agent side: no installs beyond what the OS usually ships, no daemon. `ask.sh` needs bash, curl, OpenSSL ≥ 1.1.1 and coreutils; `ask.ps1` needs only PowerShell 5.1 + .NET Framework.
 - Any AI agent, not Claude-specific. Distributed as a skill: `SKILL.md` + scripts, also served at `https://asku.dev/skill.md`.
 - Public hosted relay: user moves between networks, uses phone/tablet, Windows + Linux agents.
 - Relay never sees plaintext.
@@ -92,13 +92,14 @@ Unanswered optional questions go in `skipped`. Questions the user hands back wit
 Plaintext shapes are defined in [`schema.json`](schema.json).
 
 ### Frontend
-[`web/`](web): `bun run build` writes `dist/` (hashed assets with SRI; the schema validator is compiled at build time because the CSP forbids eval). The relay serves the site's pages (`/`, `/how`, `/security`, `/install`, `/start`, each with its own head and static copy from [`web/pages.ts`](web/pages.ts)), `/a/:sid` (answer) and `/j/:sid` (tells a human that link is for the agent, `noindex`) from it, the files in [`web/static/`](web/static) (icons, share image, `robots.txt`), plus the skill: `/skill.md` ([`skill/SKILL.md`](skill/SKILL.md)), `/ask.sh`, `/ask.ps1` and `/schema.json`.
+[`web/`](web): `bun run build` writes `dist/` (hashed assets with SRI; the schema validator is compiled at build time because the CSP forbids eval). The relay serves the site's pages (`/`, `/how`, `/security`, `/demo`, `/install`, `/start`, `/terms`, each with its own head and static copy from [`web/pages.ts`](web/pages.ts)), `/a/:sid` (answer) and `/j/:sid` (tells a human that link is for the agent, `noindex`) from it, the files in [`web/static/`](web/static) (icons, share image, `robots.txt`, `sitemap.xml`), plus the skill: `/skill.md` ([`skill/SKILL.md`](skill/SKILL.md)), `/ask.sh`, `/ask.ps1` and `/schema.json`.
 The page keeps key pair B (non-extractable) and its write key in IndexedDB, so a reload or a closed tab carries on. The relay rejects a second binding, so the session stays tied to the first browser that opened it.
 
 ### Agent CLI
 `skill/ask.sh` and `skill/ask.ps1` take the same commands:
 ```
 ask.sh ask <questions.json | ->   # ask.ps1 ask <questions.json>
+ask.sh add <questions.json | ->   # append to the open form without waiting
 ask.sh join <agent link>          # session the user started on the website; prints {"note": …}
 ask.sh say <text>                 # one-way update on the page; queued until the user opens the link
 ask.sh wait
@@ -110,7 +111,7 @@ ask.sh version                    # client version, same in both scripts
 - One question message per round: the next `ask` is refused until the last one is answered.
 - If the binding fails the token check, the session is deleted and the command exits `1`.
 - `join` refuses a link whose hash doesn't match the session's key, and a session name already in use. A joined session talks to the relay in its link, whatever `ASKU_URL` says.
-- State lives in `~/.asku/<session>/`, mode 700. The agent private key never leaves it.
+- State lives in `~/.asku/<session>/` (`ask.sh` creates it mode 700). The agent private key never leaves it.
 - Env: `ASKU_URL` (default `https://asku.dev`), `ASKU_SESSION` (default `default`), `ASKU_HOME`, `ASKU_WAIT` (seconds before `PENDING`, default 500).
 
 ### Relay API
@@ -142,7 +143,7 @@ POST bodies must be `application/json`. Writes take `Authorization: Bearer <key>
 | browser | `GET /s/:sid/q?after=n` | SSE: `event: q` with `id: seq`, data = envelope; `event: close` on purge. Resumes from `Last-Event-ID` |
 | browser | `POST /s/:sid/a` envelope, browser key | `204`; `seq` must match an asked q not yet answered, or be `0` (once) in a browser-created session, else `409` |
 
-Errors are `{error}` with `400 401 404 409 413 429`. The relay stores only sha256 of write keys.
+Errors are `{error}` with `400 401 404 405 409 413 429`. The relay stores only sha256 of write keys.
 
 
 ### Relay hygiene
