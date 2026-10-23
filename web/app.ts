@@ -125,7 +125,8 @@ function beep() {
   o.stop(t + 0.25);
 }
 const ping = (mood?: Mood) => {
-  navigator.vibrate?.(mood === "begging" ? [150, 80, 150, 80, 400] : 200);
+  // before any tap, Chrome refuses and logs an error
+  if (navigator.userActivation?.hasBeenActive ?? true) navigator.vibrate?.(mood === "begging" ? [150, 80, 150, 80, 400] : 200);
   beep();
 };
 
