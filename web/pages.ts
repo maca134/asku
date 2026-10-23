@@ -36,8 +36,8 @@ export const PAGES: Record<string, Page> = {
     nav: "Demo",
     title: "asku demo: Claude Code, Codex CLI and Gemini CLI asking you on your phone",
     description: "See asku in Claude Code, Codex CLI and Gemini CLI: the agent asks, adds a follow-up while you answer on your phone, and carries on with your JSON.",
-    h1: "Works in the agent you already use",
-    lead: "Same skill, same script. The agent asks, adds a follow-up while you're answering, and carries on with your JSON.",
+    h1: "Hand off the work, keep the decisions",
+    lead: "Your agent asks when it needs you, adds follow-ups while you're answering, and carries on with your JSON. In whichever agent you use.",
   },
   "/install": {
     nav: "Install",

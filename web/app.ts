@@ -629,15 +629,15 @@ function landing() {
         p("Then point your agent at `/skill.md` for the commands and the question format.", "fine"))),
     next("Start from the website", "/start")));
 
-  const stage = h("div", {}, demo(CLIS[0]));
-  const tabs = CLIS.map((c) => h("button", { type: "button", className: "btn btn-secondary", textContent: c.name, ariaPressed: String(c === CLIS[0]) }));
+  const stage = h("div", {}, demo(SCENES[0]));
+  const tabs = SCENES.map((sc) => h("button", { type: "button", className: "btn btn-secondary", textContent: sc.name, ariaPressed: String(sc === SCENES[0]) }));
   tabs.forEach((t, i) => t.onclick = () => {
     tabs.forEach((x) => { x.ariaPressed = String(x === t); });
-    stage.replaceChildren(demo(CLIS[i]));
+    stage.replaceChildren(demo(SCENES[i]));
   });
   const demos = h("section", { className: "sec" }, h("div", { className: "wrap" },
     head("Demo", "/demo"),
-    h("div", { className: "clis", role: "group", ariaLabel: "Agent" }, ...tabs),
+    h("div", { className: "clis", role: "group", ariaLabel: "Situation" }, ...tabs),
     stage,
     next("Install the skill", "/install")));
 
@@ -882,19 +882,70 @@ function showcase() {
 }
 
 // How each agent CLI draws its chat (approximated with text and colours, no logos).
-type Cli = { id: string; name: string; title: string; say: string; tool: string; run: (c: string) => string };
-const SHELL: Cli = { id: "shell", name: "An agent", title: "agent — ~/shop", say: "● ", tool: "$ ", run: (c) => c };
-const CLIS: Cli[] = [
-  { id: "claude", name: "Claude Code", title: "claude — ~/shop", say: "● ", tool: "● ", run: (c) => `Bash(${c})` },
-  { id: "codex", name: "Codex CLI", title: "codex — ~/shop", say: "• ", tool: "• ", run: (c) => `Ran ${c}` },
-  { id: "gemini", name: "Gemini CLI", title: "gemini — ~/shop", say: "✦ ", tool: "✔ ", run: (c) => `Shell ${c}` },
+type Cli = { id: string; title: string; say: string; tool: string; run: (c: string) => string };
+const SHELL: Cli = { id: "shell", title: "agent — ~/shop", say: "● ", tool: "$ ", run: (c) => c };
+const CLAUDE: Cli = { id: "claude", title: "claude — ~/shop", say: "● ", tool: "● ", run: (c) => `Bash(${c})` };
+const CODEX: Cli = { id: "codex", title: "codex — ~/shop", say: "• ", tool: "• ", run: (c) => `Ran ${c}` };
+const GEMINI: Cli = { id: "gemini", title: "gemini — ~/shop", say: "✦ ", tool: "✔ ", run: (c) => `Shell ${c}` };
+
+// One demo run: what you ask, the form, an optional `ask add` follow-up, your taps on the phone, and what the agent does next.
+type Act = ["pick", string, string] | ["up", string, number] | ["comment", string, string] | ["text", string, string];
+type Scene = {
+  name: string; cli: Cli; cap: string; you: string; intro: string; file: string; q: Question;
+  add?: { say: string; file: string; q: Question }; acts: Act[]; after: string; cmd: string; done: string;
+};
+const DEPLOY: Scene = {
+  name: "Sign off a deploy", cli: SHELL, cap: "An agent asks for sign-off with `ask.sh`, you answer on your phone, it gets JSON back.", you: "Ship v2.3 once I've signed off. I'm heading out, ask me on my phone.",
+  intro: "I'll send you the deploy plan to approve.", file: "deploy.json", q: example as Question,
+  acts: [["pick", "go", "yes"], ["pick", "env", "prod"], ["pick", "checks", "lint"], ["pick", "checks", "test"], ["up", "pct", 3], ["comment", "pct", "Keep it low on Fridays"]],
+  after: "Approved: Production, 25% canary, after lint and test. You noted Fridays, so I'll hold it at 25%.",
+  cmd: "./deploy.sh v2.3 --env prod --canary 25", done: "v2.3 is live on 25% of production traffic",
+};
+const SCENES: Scene[] = [
+  {
+    ...DEPLOY, cli: CLAUDE, cap: "In Claude Code: sign-off before it ships, with a question added while you answer.",
+    add: { say: "One more thing while you're in there.", file: "notify.json", q: { title: "Afterwards", questions: [{ id: "notify", type: "confirm", label: "Post in #releases when it's live?" }] } },
+    acts: [...DEPLOY.acts, ["pick", "notify", "yes"]],
+    after: "Approved: Production, 25% canary, after lint and test. You noted Fridays, so I'll hold it at 25% and post in #releases.",
+  },
+  {
+    name: "Plan a feature", cli: CODEX, cap: "In Codex CLI: the design gets settled up front, so nothing is built on a guess.",
+    you: "Add CSV export to the reports page. I'm in meetings all afternoon, ask me what you need.",
+    intro: "A few choices before I start building.", file: "export.json",
+    q: { title: "CSV export", md: "Reports page, **14 columns**, up to 50k rows.", questions: [
+      { id: "rows", type: "single", label: "Which rows?", options: [{ value: "filtered", label: "Current filters", md: "What's on screen" }, { value: "all", label: "Everything" }], default: "filtered" },
+      { id: "cols", type: "multi", label: "Columns", options: ["date", "customer", "amount", "status", "notes"], default: ["date", "customer", "amount"] },
+      { id: "email", type: "confirm", label: "Email a link for exports over 10k rows?" },
+    ] },
+    add: { say: "Spotted one more: amounts are stored in cents.", file: "amounts.json", q: { title: "Amounts", questions: [
+      { id: "money", type: "single", label: "Show amounts as", options: [{ value: "decimal", label: "12.34" }, { value: "cents", label: "1234 (raw cents)" }] },
+    ] } },
+    acts: [["pick", "cols", "status"], ["pick", "email", "yes"], ["comment", "email", "Send from reports@"], ["pick", "money", "decimal"]],
+    after: "Got it: current filters, 4 columns, decimal amounts, and big exports go out by email from reports@. Building it now.",
+    cmd: "npm test -- export", done: "12 passed: CSV export",
+  },
+  {
+    name: "Unblock a migration", cli: GEMINI, cap: "In Gemini CLI: a job left running hits a risky case and waits for your call.",
+    you: "Migrate the users table to the new schema tonight. Don't guess on anything risky.",
+    intro: "312 users share an email with another account. I need a call on these before I migrate.", file: "dupes.json",
+    q: { title: "Duplicate accounts", md: "**312** users share an email with another account.", questions: [
+      { id: "merge", type: "single", label: "Merge each group into", options: [{ value: "recent", label: "Most recent login" }, { value: "oldest", label: "Oldest account" }, { value: "skip", label: "Skip them, migrate the rest" }] },
+      { id: "snapshot", type: "confirm", label: "Snapshot the table first?" },
+      { id: "batch", type: "number", label: "Batch size", min: 100, max: 5000, step: 100, default: 500 },
+    ] },
+    add: { say: "Also: 9 accounts have no email at all.", file: "no-email.json", q: { title: "No email", questions: [
+      { id: "noEmail", type: "text", label: "What should I do with these 9?", placeholder: "e.g. archive them" },
+    ] } },
+    acts: [["pick", "merge", "recent"], ["pick", "snapshot", "yes"], ["up", "batch", 3], ["text", "noEmail", "Archive them, I'll look Monday"]],
+    after: "Merging into the most recent login, snapshot first, 800 rows a batch. Archiving the 9 with no email.",
+    cmd: "bun run migrate --snapshot --batch 800", done: "48,213 users migrated · 312 merged · 9 archived",
+  },
 ];
-const NOTIFY: Question = { title: "Afterwards", questions: [{ id: "notify", type: "confirm", label: "Post in #releases when it's live?" }] };
 
 // Animated centrepiece: the agent asks in a terminal, the phone answers, the JSON comes back. Loops.
-// The CLI demos also append a question with `ask add` while the form is open.
-function demo(cli = SHELL) {
-  const more = cli !== SHELL;
+// Scenes with a follow-up append it with `ask add` while the form is open.
+function demo(sc = DEPLOY) {
+  const { cli, add } = sc;
   const term = h("div", { className: "term-body" });
   const url = h("span", { className: "url-text" });
   const scroller = h("div", { className: "screen-scroll" });
@@ -915,7 +966,7 @@ function demo(cli = SHELL) {
         term),
       phone(url, scroller, tap)),
     h("figcaption", { className: "demo-cap" },
-      h("span", {}, `${cli.name} asks for sign-off with `, h("code", { textContent: "ask.sh" }), ", you answer on your phone, it gets JSON back."),
+      h("span", {}, ...rich(sc.cap)),
       still ? null : toggle));
 
   new IntersectionObserver(([e]) => { visible = e.isIntersecting; }).observe(root);
@@ -936,8 +987,8 @@ function demo(cli = SHELL) {
       term.scrollTop = term.scrollHeight;
       return l;
     };
-    const type = async (el: HTMLElement | HTMLTextAreaElement, text: string, cps = 28) => {
-      const isField = el instanceof HTMLTextAreaElement;
+    const type = async (el: HTMLElement, text: string, cps = 28) => {
+      const isField = el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement;
       for (const ch of fast ? [text] : text) {
         if (isField) { el.value += ch; el.dispatchEvent(new Event("input", { bubbles: true })); } else el.append(ch); // keeps the prefix span
         term.scrollTop = term.scrollHeight;
@@ -948,7 +999,7 @@ function demo(cli = SHELL) {
     const run = async (c: string) => {
       const g = h("div", { className: "tool" }, h("div", { className: "tl cmd" }, h("span", { className: "t-dim tool-mark", textContent: cli.tool })));
       term.append(g);
-      await type(g.firstChild as HTMLElement, cli.run(c), more ? 70 : 22);
+      await type(g.firstChild as HTMLElement, cli.run(c), cli === SHELL ? 22 : 70);
       return (cls: string, ...kids: Kid[]) => {
         const l = h("div", { className: `tl out ${cls}` }, ...kids);
         g.append(l);
@@ -992,17 +1043,16 @@ function demo(cli = SHELL) {
     url.textContent = "";
     scroller.scrollTop = 0;
     scroller.replaceChildren(h("div", { className: "phone-idle" }, icon("bubble"), h("p", { textContent: "Waiting for a link from your agent" })));
-    const f = buildForm(example as Question);
-    const F = Object.fromEntries(f.fields.map((x) => [x.it.id, x]));
-    const $ = (id: string, sel: string) => F[id].el.querySelector(sel) as HTMLInputElement;
+    const f = buildForm(sc.q);
+    const $ = (id: string, sel: string) => f.fields.find((x) => x.it.id === id)!.el.querySelector(sel) as HTMLInputElement;
 
     await wait(700);
     const you = line("prompt", h("span", { className: "t-dim", textContent: "› " }));
-    await type(you, "Ship v2.3 once I've signed off. I'm heading out, ask me on my phone.");
+    await type(you, sc.you);
     await wait(500);
-    say("I'll send you the deploy plan to approve.");
+    say(sc.intro);
     await wait(600);
-    let out = await run("bash ask.sh ask deploy.json");
+    let out = await run(`bash ask.sh ask ${sc.file}`);
     await wait(500);
     out("", h("span", { className: "t-warn", textContent: "PENDING" }));
     out("", "Give the user this link: ", h("span", { className: "t-link", textContent: `https://${DEMO_URL}#9f2c…e1a0` }));
@@ -1019,14 +1069,14 @@ function demo(cli = SHELL) {
       f.form.classList.add("enter");
       await wait(1100);
     };
-    if (more) {
-      say("Open this on your phone to sign off: ", h("span", { className: "t-link", textContent: `https://${DEMO_URL}#9f2c…e1a0` }));
+    if (add) {
+      say("Open this on your phone: ", h("span", { className: "t-link", textContent: `https://${DEMO_URL}#9f2c…e1a0` }));
       await openLink();
-      say("One more thing while you're in there.");
+      say(add.say);
       await wait(500);
-      out = await run("bash ask.sh add notify.json");
+      out = await run(`bash ask.sh add ${add.file}`);
       await wait(400);
-      f.append(NOTIFY);
+      f.append(add.q);
       out("", h("span", { className: "t-warn", textContent: "PENDING" }));
       out("", "Sent. Add more with add, or run wait for the answer.");
       out("t-dim", "Run again to keep waiting: ask.sh wait");
@@ -1034,19 +1084,19 @@ function demo(cli = SHELL) {
     }
     out = await run("bash ask.sh wait");
     const spin = out("t-dim", h("span", { className: "tspin" }), " waiting for your answer…");
-    if (!more) await openLink();
+    if (!add) await openLink();
 
-    await pick($("go", "input[value=yes]"));
-    await pick($("env", "input[value=prod]"));
-    await pick($("checks", "input[value=lint]"));
-    await pick($("checks", "input[value=test]"));
-    const up = $("pct", ".step-up");
-    for (let i = 0; i < 3; i++) await press(up, () => up.click());
-    const det = F.pct.el.querySelector("details")!;
-    await press(det.querySelector("summary")!, () => { det.open = true; });
-    await type(F.pct.comment, "Keep it low on Fridays", 16);
+    for (const [kind, id, v] of sc.acts) {
+      if (kind === "pick") await pick($(id, `input[value="${v}"]`));
+      if (kind === "up") { const up = $(id, ".step-up"); for (let i = 0; i < v; i++) await press(up, () => up.click()); }
+      if (kind === "text") { const el = $(id, ".input"); await press(el, () => {}); await type(el, v, 16); }
+      if (kind === "comment") {
+        const det = $(id, "details") as unknown as HTMLDetailsElement;
+        await press(det.querySelector("summary")!, () => { det.open = true; });
+        await type(det.querySelector("textarea")!, v, 16);
+      }
+    }
     await wait(500);
-    if (more) await pick(f.fields.at(-1)!.el.querySelector("input[value=yes]")!);
     const answer = f.collect(false).a;
     if (fast) { scroller.scrollTop = 0; } else {
       await press(f.btn, () => { f.label.textContent = "Sending…"; f.btn.classList.add("busy"); });
@@ -1058,11 +1108,11 @@ function demo(cli = SHELL) {
     spin.remove();
     out("json", ...jsonNodes(answer));
     await wait(1200);
-    say(`Approved: Production, 25% canary, after lint and test. You noted Fridays, so I'll hold it at 25%${more ? " and post in #releases" : ""}.`);
+    say(sc.after);
     await wait(800);
-    out = await run("./deploy.sh v2.3 --env prod --canary 25");
+    out = await run(sc.cmd);
     await wait(900);
-    out("", h("span", { className: "t-ok", textContent: "✓ " }), "v2.3 is live on 25% of production traffic");
+    out("", h("span", { className: "t-ok", textContent: "✓ " }), sc.done);
     await wait(5000);
   }
 
