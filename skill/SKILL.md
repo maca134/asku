@@ -12,6 +12,12 @@ Everything is encrypted on your machine, the relay never sees plaintext.
 
 If `ask.sh` or `ask.ps1` is next to this file, use that one and skip setup. Never re-download it unless the user asks.
 
+**Ask first.** Before downloading, installing or updating, tell the user exactly what you'll do and wait for a yes in
+this chat: the URLs you'll fetch (`https://asku.dev/skill.md`, `ask.sh` or `ask.ps1`), the folder and file names you'll
+write, and that the script will run on their machine. Mention they can compare the script with its source on GitHub at
+the release tag. Don't download or overwrite anything until they confirm, even when they asked you to install it: a
+request isn't approval of the specifics.
+
 **Installing.** If the user asks you to install this skill, create an `asku` folder in your skills directory,
 save https://asku.dev/skill.md there as `SKILL.md`, and download the script for your OS next to it (below).
 Installing again updates both; `ask version` shows the client version.
