@@ -11,7 +11,16 @@ unhex()  { printf "$(sed 's/../\\x&/g')"; }
 b64()    { openssl base64 -A; }
 unb64()  { openssl base64 -d -A; }
 sha256() { openssl dgst -sha256 -binary | hex; }
-hmac()   { openssl dgst -sha256 -mac HMAC -macopt "hexkey:$1" -binary | hex; } # <key hex> < msg
+
+# hmac <key hex> < msg -> hex. Built on plain SHA-256 so the key stays out of openssl's argv, which other users can read.
+# Keys here are 16 or 32 bytes, never longer than the 64-byte block, so none needs hashing first.
+hmac() {
+  local k i ip=() op=()
+  printf -v k '%s%0128d' "$1" 0
+  for ((i = 0; i < 64; i++)); do ip[i]=$((16#${k:i*2:2} ^ 0x36)); op[i]=$((16#${k:i*2:2} ^ 0x5c)); done
+  printf -v ip '\\x%02x' "${ip[@]}"; printf -v op '\\x%02x' "${op[@]}"
+  { printf "$op"; { printf "$ip"; cat; } | openssl dgst -sha256 -binary; } | sha256
+}
 
 # derive <key.pem> <peer pub b64> -> K hex
 derive() {
@@ -33,6 +42,8 @@ seal() {
   local ke km iv ct
   ke=$(printf enc | hmac "$1"); km=$(printf mac | hmac "$1")
   iv=${5:-$(openssl rand -hex 16)}
+  # ponytail: kEnc reaches openssl's argv here and in open (enc takes a raw key only as -K), where other local users can read it; kMac
+  # doesn't, so they can read messages but not forge them. Upgrade path: an AES helper that reads the key on stdin.
   ct=$(openssl enc -aes-256-cbc -K "$ke" -iv "$iv" | b64)
   printf '{"v":1,"seq":%d,"dir":"%s","iv":"%s","ct":"%s","tag":"%s"}' "$4" "$3" \
     "$(printf %s "$iv" | unhex | b64)" "$ct" "$(tag "$km" "$2" "$3" "$4" "$iv" "$ct" | unhex | b64)"
