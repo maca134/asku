@@ -79,11 +79,12 @@ test("openssl (skill/ask.sh), agent side", () => {
   // other local users can read process arguments: K, kMac and T must never reach openssl's argv
   const m = v.messages[0]!;
   const log = join(mkdtempSync(join(tmpdir(), "asku-")), "argv");
-  const spy = `openssl() { echo "$*" >> '${log}'; command openssl "$@"; }; . skill/ask.sh;`;
-  const bash = process.env.ASKU_BASH ?? "bash";
-  expect(sh([bash, "-c", `${spy} seal "$@" >/dev/null`, "_", v.K, v.sid, m.dir, `${m.seq}`], m.pt).ok).toBe(true);
-  expect(sh([bash, "-c", `${spy} open "$@"`, "_", v.K, v.sid, m.dir, `${m.seq}`, m.iv, m.ct, m.tag]).ok).toBe(true);
-  expect(sh([bash, "-c", `${spy} bindok "$@"`, "_", v.token, v.pubB, v.bind]).ok).toBe(true);
+  // vector args are hex, base64 or plain words, safe to pass through eval unquoted
+  const spy = (args: string[], stdin?: string) =>
+    sh(["eval", `openssl() { echo "$*" >> '${log}'; command openssl "$@"; }; ${args.join(" ")}`], stdin);
+  expect(spy(["seal", v.K, v.sid, m.dir, `${m.seq}`], m.pt).ok).toBe(true);
+  expect(spy(["open", v.K, v.sid, m.dir, `${m.seq}`, m.iv, m.ct, m.tag]).ok).toBe(true);
+  expect(spy(["bindok", v.token, v.pubB, v.bind]).ok).toBe(true);
   const argv = readFileSync(log, "utf8");
   for (const key of [v.K, v.kMac, v.token]) expect(argv).not.toContain(key);
 
