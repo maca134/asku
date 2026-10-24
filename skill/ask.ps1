@@ -1,7 +1,7 @@
 # asku agent client. PowerShell 5.1 + .NET Framework only. Keep this file ASCII: PS 5.1 reads BOM-less files as ANSI.
 param([string]$Command, [string]$File)
 $ErrorActionPreference = 'Stop'
-$Version = '1.5.0' # keep in step with ask.sh
+$Version = '1.5.5' # keep in step with ask.sh
 
 function ConvertTo-AskuHex([byte[]]$Bytes) { [BitConverter]::ToString($Bytes).Replace('-', '').ToLower() }
 

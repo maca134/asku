@@ -3,7 +3,7 @@
 # ponytail: LibreSSL (macOS /usr/bin/openssl) lacks `dgst -macopt hexkey`; hand-rolled HMAC if macOS agents matter.
 set -euo pipefail
 
-VERSION=1.5.0 # keep in step with ask.ps1
+VERSION=1.5.5 # keep in step with ask.ps1
 
 SPKI_P256=3059301306072a8648ce3d020106082a8648ce3d030107034200
 
