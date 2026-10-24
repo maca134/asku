@@ -25,7 +25,7 @@ Installing again updates both; `ask version` shows the client version.
 If you only need the script (not the skill), download the one for your OS and keep it somewhere stable (e.g. `~/.asku/`):
 
 ```bash
-curl -fsSLO https://asku.dev/ask.sh && chmod +x ask.sh      # Linux/macOS: needs bash, curl, OpenSSL >= 1.1.1
+curl -fsSLO https://asku.dev/ask.sh && chmod +x ask.sh      # Linux/macOS: needs bash, curl, OpenSSL >= 1.1.1 or LibreSSL
 ```
 ```powershell
 iwr https://asku.dev/ask.ps1 -OutFile ask.ps1                # Windows: PowerShell 5.1+, nothing else
