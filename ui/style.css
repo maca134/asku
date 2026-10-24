@@ -30,7 +30,6 @@
   --shadow: 0 1px 2px #0b0b100d, 0 10px 30px -12px #0b0b1024;
   --shadow-lg: 0 2px 6px #0b0b100d, 0 30px 70px -20px #0a3d224d;
   --term-bg: #0c0c11;
-  --glow: #12a15024;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -59,7 +58,6 @@
     --shadow: 0 1px 2px #0006, 0 10px 30px -12px #000a;
     --shadow-lg: 0 2px 6px #0006, 0 30px 80px -20px #000;
     --term-bg: #0d0d12;
-    --glow: #3ddc841f;
   }
 }
 
@@ -309,63 +307,14 @@ code {
 }
 
 .hero {
-  position: relative;
   padding: 3.5rem 0 3.5rem;
   overflow: hidden;
-  isolation: isolate;
-}
-.hero::before {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  left: 50%;
-  top: -240px;
-  width: 1300px;
-  height: 900px;
-  translate: -50% 0;
-  background:
-    radial-gradient(40% 38% at 50% 42%, var(--glow), transparent 72%),
-    radial-gradient(22% 26% at 72% 40%, color-mix(in srgb, var(--accent-2) 12%, transparent), transparent 70%);
-}
-.hero::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: 0 0 auto;
-  height: 620px;
-  opacity: 0.6;
-  background-image:
-    linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
-  background-size: 44px 44px;
-  background-position: center -1px;
-  mask-image: radial-gradient(58% 70% at 50% 0%, #000 25%, transparent 78%);
-  -webkit-mask-image: radial-gradient(58% 70% at 50% 0%, #000 25%, transparent 78%);
 }
 .hero-copy {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-}
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  margin: 0 0 1.6rem;
-  padding: 0.35rem 0.85rem 0.35rem 0.7rem;
-  font-size: 0.8rem;
-  font-weight: 550;
-  color: var(--fg-2);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  box-shadow: var(--shadow-sm);
-}
-.pill .icon {
-  color: var(--ok);
-  width: 1em;
-  height: 1em;
-  stroke-width: 2.2;
 }
 .hero h1 {
   font-size: clamp(2.35rem, 8vw, 4.5rem);
@@ -374,12 +323,6 @@ code {
   font-weight: 760;
   margin: 0 0 1.4rem;
   text-wrap: balance;
-}
-.grad {
-  background: linear-gradient(95deg, var(--accent) 5%, var(--accent-2) 95%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
 }
 .lead {
   font-size: 1.08rem;
@@ -826,14 +769,6 @@ code {
 .sec-head .lead {
   margin: 0 auto;
 }
-.eyebrow {
-  margin: 0 0 0.8rem;
-  font-size: 0.78rem;
-  font-weight: 650;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--accent-text);
-}
 h2,
 .sec-head h1 {
   margin: 0 0 1rem;
@@ -871,10 +806,7 @@ h3 {
   border-radius: 16px;
   box-shadow: var(--shadow-sm);
 }
-.step-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.step .step-icon {
   margin-bottom: 1.15rem;
 }
 .step-icon,
@@ -891,10 +823,6 @@ h3 {
 .node-icon .icon {
   width: 20px;
   height: 20px;
-}
-.step-n {
-  font: 600 0.78rem var(--mono);
-  color: var(--faint);
 }
 .step h3 {
   margin: 0 0 0.4rem;

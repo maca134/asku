@@ -10,10 +10,9 @@ import { countdown, demo, showcase } from "./demo";
 import { PAGES, TERMS } from "./pages";
 import { SCENES } from "./scenes";
 
-function sectionHead(eyebrow: string, title: string, lead: string, tag: "h1" | "h2" = "h2") {
+function sectionHead(title: string, lead: string, tag: "h1" | "h2" = "h2") {
   return (
     <div className="sec-head">
-      <p className="eyebrow">{eyebrow}</p>
       {h(tag, null, title)}
       <p className="lead">{codeSpans(lead)}</p>
     </div>
@@ -21,7 +20,7 @@ function sectionHead(eyebrow: string, title: string, lead: string, tag: "h1" | "
 }
 
 // a page's main heading, from PAGES
-const pageHead = (eyebrow: string, path: string) => sectionHead(eyebrow, PAGES[path].h1, PAGES[path].lead, "h1");
+const pageHead = (path: string) => sectionHead(PAGES[path].h1, PAGES[path].lead, "h1");
 
 const nextLink = (label: string, href: string) => (
   <div className="next">
@@ -37,14 +36,10 @@ const install = () => nextLink("Install the skill", "/install");
 export const hero = () => (
   <section className="hero">
     <div className="wrap hero-copy">
-      <p className="pill">
-        {icon("lock")}
-        <span>End-to-end encrypted · No account · Open source</span>
-      </p>
       <h1>
         Your agent asks.
         <br />
-        <span className="grad">You answer from anywhere.</span>
+        You answer from anywhere.
       </h1>
       <p className="lead">{codeSpans(PAGES["/"].lead)}</p>
       <div className="ctas">
@@ -61,12 +56,9 @@ export const hero = () => (
   </section>
 );
 
-const step = (number: string, iconName: string, title: string, text: string) => (
+const step = (iconName: string, title: string, text: string) => (
   <li className="step">
-    <div className="step-top">
-      <span className="step-icon">{icon(iconName)}</span>
-      <span className="step-n">{number}</span>
-    </div>
+    <span className="step-icon">{icon(iconName)}</span>
     <h3>{title}</h3>
     <p>{codeSpans(text)}</p>
   </li>
@@ -75,25 +67,17 @@ const step = (number: string, iconName: string, title: string, text: string) => 
 const steps = () => (
   <ol className="steps">
     {step(
-      "01",
       "terminal",
       "Your agent asks",
       "It writes a form as JSON and runs `ask.sh ask q.json`. A key pair is made on its machine.",
     )}
+    {step("link", "You get a link", "The agent shows you a link. Open it on your phone, a tablet, or any browser.")}
     {step(
-      "02",
-      "link",
-      "You get a link",
-      "The agent shows you a link. Open it on your phone, a tablet, or any browser.",
-    )}
-    {step(
-      "03",
       "phone",
       "You answer",
       "Tap through yes/no, choices, dates, rankings and approvals. Add comments. It's encrypted before it leaves the page.",
     )}
     {step(
-      "04",
       "json",
       "It carries on",
       "`ask.sh wait` returns your answers as JSON. Follow-up questions land in the same tab.",
@@ -104,7 +88,7 @@ const steps = () => (
 export const how = () => (
   <section className="sec" id="how">
     <div className="wrap">
-      {pageHead("How it works", "/how")}
+      {pageHead("/how")}
       {steps()}
     </div>
   </section>
@@ -113,7 +97,7 @@ export const how = () => (
 export const homeHow = () => (
   <section className="sec">
     <div className="wrap">
-      {sectionHead("How it works", "Four steps, no account", "A script on the agent's side and a web page on yours.")}
+      {sectionHead("Four steps, no account", "A script on the agent's side and a web page on yours.")}
       {steps()}
     </div>
   </section>
@@ -160,7 +144,7 @@ const wire = () => (
 export const security = () => (
   <section className="sec">
     <div className="wrap">
-      {pageHead("Security", "/security")}
+      {pageHead("/security")}
       <div className="flow" ariaHidden="true">
         {node("terminal", "Your agent", "key pair A")}
         {wire()}
@@ -195,11 +179,7 @@ export const security = () => (
 export const homeSecurity = () => (
   <section className="sec">
     <div className="wrap">
-      {sectionHead(
-        "Security",
-        "The relay only sees ciphertext",
-        "Encryption happens on your agent's machine and in your browser.",
-      )}
+      {sectionHead("The relay only sees ciphertext", "Encryption happens on your agent's machine and in your browser.")}
       <ul className="points">
         {keysPoint()}
         {ciphertextPoint()}
@@ -243,7 +223,6 @@ export const controls = () => (
       <div className="split">
         <div className="split-copy">
           {sectionHead(
-            "The form",
             "Built for answering with one thumb",
             "Agents get eight question types, markdown for context, deadlines and moods. Every question takes a comment, or can be left to the agent. Try it: this is the real form, and the panel shows exactly what your agent would receive.",
           )}
@@ -351,7 +330,6 @@ export function gallery() {
     <section className="sec sec-alt">
       <div className="wrap">
         {sectionHead(
-          "Controls",
           "Every control, live",
           "The answer page's real code. Tap around: any question takes a comment, or can be left to the agent.",
         )}
@@ -381,7 +359,7 @@ export function gallery() {
 export const faq = () => (
   <section className="sec">
     <div className="wrap narrow">
-      {sectionHead("FAQ", "Questions people ask", "The short answers.")}
+      {sectionHead("Questions people ask", "The short answers.")}
       <dl className="faq">
         {PAGES["/how"].faq!.map(([question, answer]) => [<dt>{question}</dt>, <dd>{codeSpans(answer)}</dd>])}
       </dl>
@@ -393,7 +371,7 @@ export const faq = () => (
 export const installation = () => (
   <section className="sec">
     <div className="wrap narrow">
-      {pageHead("Install", "/install")}
+      {pageHead("/install")}
       <div className="card install">
         <p className="card-label">Say this to your agent</p>
         {copyable(installLine(), "›")}
@@ -429,7 +407,7 @@ export function demos() {
   return (
     <section className="sec">
       <div className="wrap">
-        {pageHead("Demo", "/demo")}
+        {pageHead("/demo")}
         <div className="clis" role="group" ariaLabel="Situation">
           {tabs}
         </div>
@@ -442,7 +420,7 @@ export function demos() {
 export const start = () => (
   <section className="sec">
     <div className="wrap narrow">
-      {pageHead("Start here", "/start")}
+      {pageHead("/start")}
       {startCard()}
     </div>
   </section>
@@ -451,7 +429,7 @@ export const start = () => (
 export const sessions = () => (
   <section className="sec">
     <div className="wrap narrow">
-      {pageHead("Your sessions", "/sessions")}
+      {pageHead("/sessions")}
       {sessionList()}
     </div>
   </section>
@@ -460,7 +438,7 @@ export const sessions = () => (
 export const terms = () => (
   <section className="sec">
     <div className="wrap narrow">
-      {pageHead("Terms", "/terms")}
+      {pageHead("/terms")}
       <div className="terms">
         <p>{TERMS.intro}</p>
         {TERMS.sections.map(({ heading, text, points }) => [
