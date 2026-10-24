@@ -29,7 +29,6 @@ import { drop, markAsked, rename, save } from "./storage";
 export function listen(session: Session) {
   const { sid, keys, state } = session;
   status("wait", "Connected", "Waiting for the agent's question. This page updates by itself, keep it open.");
-  const events = new EventSource(`/s/${sid}/q`);
   const opened = Date.now();
   if (!state.start) {
     state.start = opened;
@@ -134,8 +133,51 @@ export function listen(session: Session) {
       current?.answeredElsewhere(seq);
     });
   });
-  events.addEventListener("q", (event) => queue(() => receive(Number(event.lastEventId), event.data)));
-  events.addEventListener("close", () => {
+  // The feed resumes after the last batch it delivered. A closed feed (a 429 while the relay still counts the
+  // connection a backgrounded tab dropped, or Firefox giving up after a network error) only means the session ended
+  // if the relay says it is gone; otherwise connect again.
+  let events: EventSource;
+  let last = 0;
+  let retries = 0;
+  let retry: ReturnType<typeof setTimeout> | undefined;
+  let ended = false;
+  const connect = () => {
+    clearTimeout(retry);
+    retry = undefined;
+    events = new EventSource(`/s/${sid}/q?after=${last}`);
+    events.addEventListener("open", () => {
+      retries = 0;
+      reconnected();
+    });
+    events.addEventListener("q", (event) => {
+      const seq = Number(event.lastEventId);
+      if (Number.isSafeInteger(seq)) last = Math.max(last, seq);
+      queue(() => receive(seq, event.data));
+    });
+    events.addEventListener("close", end);
+    events.onerror = () => {
+      showReconnecting();
+      if (events.readyState === EventSource.CLOSED) recover();
+    };
+  };
+  const recover = async () => {
+    const res = await fetch(`/s/${sid}`).catch(() => null);
+    if (ended) return;
+    if (res?.status === 404) return expired();
+    retries = Math.min(retries + 1, 5);
+    retry = setTimeout(connect, 1000 * 2 ** retries); // 2s, 4s, ... 32s
+  };
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && retry) connect();
+  });
+  const expired = () => {
+    ended = true;
+    chatSlot.replaceChildren();
+    status("error", "This session has ended or expired", undefined, newSessionLink(), homeLink());
+  };
+  const end = () => {
+    ended = true;
+    clearTimeout(retry);
     events.close();
     drop(sid);
     chatSlot.replaceChildren();
@@ -148,14 +190,8 @@ export function listen(session: Session) {
         {homeLink()}
       </div>,
     );
-  });
-  events.onerror = () => {
-    if (events.readyState === EventSource.CLOSED) {
-      chatSlot.replaceChildren();
-      return status("error", "This session has ended or expired", undefined, newSessionLink(), homeLink());
-    }
-    showReconnecting(events);
   };
+  connect();
 }
 
 // Why a batch can't join the open form. The agent client checks the same; this only guards the merged answer.
@@ -170,17 +206,15 @@ function clash(form: Form, batch: Question) {
 const schemaErrors = () =>
   validQuestion.errors?.map((error) => `${error.instancePath || "/"} ${error.message}`).join("; ") ?? "invalid";
 
-// The browser reconnects by itself; say so instead of a "Connected" that isn't.
-function showReconnecting(events: EventSource) {
+// While the feed is down, say so instead of a "Connected" that isn't; put the text back once it is up again.
+let reconnecting: { text: ChildNode; was: string | null } | null = null;
+function showReconnecting() {
   const text = app.querySelector(".live")?.lastChild;
-  if (!text || text.textContent === "Reconnecting…") return;
-  const was = text.textContent;
+  if (reconnecting || !text) return;
+  reconnecting = { text, was: text.textContent };
   text.textContent = "Reconnecting…";
-  events.addEventListener(
-    "open",
-    () => {
-      text.textContent = was;
-    },
-    { once: true },
-  );
+}
+function reconnected() {
+  if (reconnecting) reconnecting.text.textContent = reconnecting.was;
+  reconnecting = null;
 }
