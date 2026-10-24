@@ -27,16 +27,9 @@ It saves the skill and one script for your OS. Next time it needs a decision, it
 
 **Reviewing for privacy?** The code that touches keys or plaintext is [`shared/crypto.ts`](shared/crypto.ts), [`ui/session/`](ui/session) (key storage, binding, encrypt/decrypt) and the agent clients [`skill/ask.sh`](skill/ask.sh) / [`skill/ask.ps1`](skill/ask.ps1). The relay ([`api/`](api)) only stores ciphertext; the rest of [`ui/`](ui) is UI and never sees keys. Conventions: [`docs/coding-standards.md`](docs/coding-standards.md).
 
-### Hard requirements
-- Agent side: no installs beyond what the OS usually ships, no daemon. `ask.sh` needs bash, curl, OpenSSL ≥ 1.1.1 and coreutils; `ask.ps1` needs only PowerShell 5.1 + .NET Framework.
-- Any AI agent, not Claude-specific. Distributed as a skill: `SKILL.md` + scripts, also served at `https://asku.dev/skill.md`.
-- Public hosted relay: user moves between networks, uses phone/tablet, Windows + Linux agents.
-- Relay never sees plaintext.
-
-### Stack
-- Relay: `Bun.serve` + `bun:sqlite`, single instance, zero runtime deps. Serves the static frontend too.
-- Frontend: Bun-bundled static assets, hashed + SRI, strict CSP, no runtime CDN. Browser deps OK.
-- Domain: asku.dev. Repo: public, MIT.
+### Design
+The agent side needs nothing the OS doesn't usually ship: `ask.sh` uses bash, curl, OpenSSL ≥ 1.1.1 and coreutils; `ask.ps1` uses PowerShell 5.1 and .NET Framework. Any agent that runs shell commands can use it through `SKILL.md`, also served at `https://asku.dev/skill.md`.
+The relay is one `Bun.serve` process with `bun:sqlite`, and its only runtime dependency is `web-push`. It serves the frontend too, as hashed assets with SRI under a strict CSP and with no CDN. It never sees plaintext.
 
 ### Transport
 - Agent: HTTP long-poll, server holds ≤25s (Bun `idleTimeout: 60`). Script loops internally and exits with `PENDING` (exit 2) before ~540s to stay under the agent tool timeout. Agent re-calls.
@@ -84,7 +77,7 @@ Verify TAG in constant time BEFORE decrypt.
 ### Envelope (relay stores opaque)
 `{ "v":1, "seq":n, "dir":"q"|"a"|"m", "iv":"…", "ct":"…", "tag":"…" }`
 
-### v1 controls
+### Question types
 `confirm`, `single`, `multi`, `review`, `rank`, `text`, `number` (stepper or slider), `date`, plus markdown context (DOMPurify) and an implicit per-question comment field.
 Any question can carry `when: { "id": …, "is": … }` to show only for one answer to an earlier question in its batch (`is` means "contains" for `multi`); hidden ones go in `skipped`.
 Answer shape: `{ "answers": { "<id>": value }, "skipped": [], "comments": { "<id>": "" }, "note": "" }`.
