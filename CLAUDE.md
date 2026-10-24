@@ -8,6 +8,8 @@ Follow `docs/coding-standards.md`: it covers layout, the key/plaintext boundary,
 - `bun run build` first: it generates `ui/gen/` (schema validator and its types), which typecheck and the app need.
 - Before committing: `bun run check`, `bun run typecheck`, `bun test`.
 - Changing `ui/session/` or `ui/form/`: also run the `e2e-local` skill (`.claude/skills/e2e-local/SKILL.md`).
+- Changes to `shared/`, `ui/session/`, `ui/form/`, `ui/dom.tsx`, `skill/`, `api/`, `build.ts`, `Dockerfile`, `compose.yaml` or
+  `.github/workflows/`: run the `security-reviewer` agent before the PR.
 - Wire-format or crypto changes go in all of `shared/crypto.ts`, `skill/ask.sh`, `skill/ask.ps1`, `test/vectors.json`
   and the README's Crypto section together.
 
