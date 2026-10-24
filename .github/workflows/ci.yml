@@ -11,14 +11,13 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     env:
-      # Windows: Git Bash, not the WSL bash.exe in System32. macOS: the stock bash 3.2, not Homebrew's
-      ASKU_BASH: ${{ matrix.os == 'windows-latest' && 'C:\Program Files\Git\bin\bash.exe' || matrix.os == 'macos-latest' && '/bin/bash' || 'bash' }}
+      # Windows: Git Bash, not the WSL bash.exe in System32
+      ASKU_BASH: ${{ matrix.os == 'windows-latest' && 'C:\Program Files\Git\bin\bash.exe' || 'bash' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-      # macOS: the stock LibreSSL in /usr/bin ahead of Homebrew's OpenSSL, as on a user's Mac
       - if: runner.os == 'macOS'
-        run: echo /usr/bin >> "$GITHUB_PATH" && /usr/bin/openssl version
+        run: echo "$(brew --prefix openssl@3)/bin" >> "$GITHUB_PATH"
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: bun run check
