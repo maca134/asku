@@ -8,6 +8,10 @@ argument-hint: "[<asku.dev/j/ link> | <what to ask>]"
 
 Send the user a form of questions; they answer in a browser at asku.dev; you get the answers as JSON.
 
+**Showing the link is the most important step.** Without it the user can't answer and everything else is wasted.
+Put the link, verbatim, in the message that ends your turn (or before a blocking `wait`), in your own words, not
+only in tool output: text written between tool calls may never reach the user.
+
 ## Setup
 
 If `ask.sh` or `ask.ps1` is next to this file, use that one: it is already installed.
@@ -50,9 +54,9 @@ Below, `ask` means whichever script you use.
 Exit codes, check every time:
 - `0`: answer JSON on stdout. It may be an `error` answer instead (see Answer format). If stderr says batches are still open, run `ask wait` again for their answers.
 - `2`: stdout starts with `PENDING`: the user hasn't answered yet. Show the first link to the user verbatim; later messages repeat it only in case they lost the page. Then run `ask wait` (again, as often as needed).
-  Put the link in your own reply, not only in tool output, and send it before you `wait`: a user who is asked to
-  approve a blocking `wait` may not have seen it. If your tool can run `wait` in the background, do that, so the
-  user can still reach you in chat while you wait. While it runs, run no other `ask` command in that session: they
+  Send the link before you `wait` (see the top of this file): a user who is asked to approve a blocking `wait` may
+  not have seen it. If your tool can run `wait` in the background, do that, so the user can still reach you in chat
+  while you wait, and end your turn with the link in that final message. While it runs, run no other `ask` command in that session: they
   read the same messages, and one of them fails verification.
 - `1`: error on stderr, with the command to run next where there is one.
 - `3`: the user pressed **STOP**. Stdout has a `{"stop":true}` line (and anything else the call returned). Stop your
