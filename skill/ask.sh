@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# asku agent client. Needs bash, curl and OpenSSL >= 1.1.1.
-# ponytail: LibreSSL (macOS /usr/bin/openssl) lacks `dgst -macopt hexkey`; hand-rolled HMAC if macOS agents matter.
+# asku agent client. Needs bash (3.2 or later), curl and OpenSSL >= 1.1.1 or LibreSSL (macOS ships both bash and LibreSSL).
 set -euo pipefail
 
 VERSION=1.5.5 # keep in step with ask.ps1

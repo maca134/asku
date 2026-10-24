@@ -390,7 +390,7 @@ export const installation = () => (
         {copyable(installLine(), "›")}
         <details className="manual">
           <summary>Or set it up by hand</summary>
-          <p className="card-label">macOS / Linux · bash, curl, OpenSSL ≥ 1.1.1</p>
+          <p className="card-label">macOS / Linux · bash, curl, OpenSSL ≥ 1.1.1 or LibreSSL</p>
           {copyable(`curl -fsSLO ${location.origin}/ask.sh && chmod +x ask.sh`, "$")}
           <p className="card-label">Windows · PowerShell 5.1+, nothing else</p>
           {copyable(`iwr ${location.origin}/ask.ps1 -OutFile ask.ps1`, ">")}
