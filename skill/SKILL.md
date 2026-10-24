@@ -76,6 +76,8 @@ tool timeout of 10 minutes (Claude Code's Bash: `timeout: 600000`), or set `ASKU
 2. Run `ask wait` until it exits `0`. If you loop it in a script or a background job, loop only on exit `2` with
    nothing printed before `PENDING`, and stop on anything else: a message also ends `wait` with exit `2`, and a STOP
    (exit `3`) is reported only once, so running `wait` again loses it; an error (exit `1`) needs you, not a retry.
+   When the answer arrives, `ask say` one line straight away, before any other work: what you took from it and what
+   you'll do next ("Got it: deploying to staging"). Until then the user's page only says the agent is working.
 3. Ask follow-ups with more `ask ask` calls in the same session, one form at a time: the next `ask` is refused until the last one is answered.
 4. Run `ask close` when done.
 
