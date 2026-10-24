@@ -233,6 +233,18 @@ export function relay({
     if (STATIC.test(pathname)) return serveFile(file, "public, max-age=86400");
   }
 
+  // Sessions on the relay (each idle under 24h), floored to tens and fixed for a minute,
+  // so the front page can't show the moment one person starts or ends a session.
+  // ponytail: someone who also makes sessions can pin the count at a boundary and still see one change; round coarser or update hourly if that matters.
+  let stats = { at: 0, live: 0 };
+  function liveCount() {
+    if (Date.now() - stats.at >= 60_000)
+      stats = { at: Date.now(), live: Math.floor(sql.totals.get()!.sessions / 10) * 10 };
+    return new Response(JSON.stringify({ live: stats.live }), {
+      headers: { "content-type": "application/json", "cache-control": "public, max-age=60" },
+    });
+  }
+
   const authorized = (req: Request, keyHash: string | null) =>
     keyHash !== null && sha256Hex(req.headers.get("authorization")?.replace(/^Bearer /, "") ?? "") === keyHash;
 
@@ -376,6 +388,7 @@ export function relay({
       const file = await staticFile(url.pathname);
       if (file) return file;
     }
+    if (req.method === "GET" && url.pathname === "/stats") return liveCount();
     const [, root, sid, action, extra] = url.pathname.split("/");
     // Unknown pages get the app, which shows its own not-found page.
     if (req.method === "GET" && root !== "s" && root !== "assets")

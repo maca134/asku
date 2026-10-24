@@ -339,6 +339,14 @@ code {
   font-size: clamp(1.05rem, 2.5vw, 1.22rem);
   max-width: 38rem;
 }
+.live-count {
+  margin: 1rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.live-count:empty {
+  display: none;
+}
 .ctas {
   display: flex;
   flex-wrap: wrap;

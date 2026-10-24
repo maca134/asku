@@ -323,3 +323,17 @@ test("agent-created session has no answer 0", async () => {
   const { key: bkey } = await (await call("POST", `/s/${sid}/bind`, { pub: v.pubB, mac: v.bind })).json();
   expect((await call("POST", `/s/${sid}/a`, env("a", 0), bkey)).status).toBe(409);
 });
+
+test("stats: session count floored to tens, held for a minute", async () => {
+  const own = relay();
+  const at = (path: string, init?: RequestInit) => fetch(`${own.server.url.href}${path}`, init);
+  const make = () =>
+    at("s", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pub: v.pubA }) });
+  for (let i = 0; i < 12; i++) await make();
+  const res = await at("stats");
+  expect(res.headers.get("cache-control")).toBe("public, max-age=60");
+  expect(await res.json()).toEqual({ live: 10 });
+  for (let i = 0; i < 8; i++) await make();
+  expect(await (await at("stats")).json()).toEqual({ live: 10 }); // 20 now, but cached
+  own.stop();
+});
