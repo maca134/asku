@@ -42,7 +42,6 @@ export function listen(session: Session) {
   const send: Send = (seqs, answer) => sendAnswer(session, seqs, answer);
 
   let current: OpenForm | null = null;
-  let workingShown = false;
   let deferred: Batch[] = []; // arrived while an answer was being sent: placed once it's done
   let chain: Promise<unknown> = Promise.resolve(); // decrypting and placing are async: keep batches in order
   const queue = (task: () => Promise<unknown>) => {
@@ -90,11 +89,9 @@ export function listen(session: Session) {
     if (valid && rename(state, message.name ?? (state.name ? undefined : message.title))) save(sid, state);
     if (state.answered.includes(seq)) {
       if (valid) addToFeed(feedEvent("check", `Answered: ${batchName(message)}`));
-      // after a reload: the same "agent is working" line as before it, not "Connected"
-      if (!current && !workingShown) {
-        workingShown = true;
-        show(waiting());
-      }
+      // after a reload: the same "agent is working" line as before it, but only in place of "Connected", never
+      // over an error or an ended session
+      if (!current && app.querySelector(".shell-main > .state.agent")) show(waiting());
       return;
     }
     if (markAsked(state, seq)) save(sid, state);
