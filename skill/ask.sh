@@ -11,7 +11,21 @@ unhex()  { printf "$(sed 's/../\\x&/g')"; }
 b64()    { openssl base64 -A; }
 unb64()  { openssl base64 -d -A; }
 sha256() { openssl dgst -sha256 -binary | hex; }
-hmac()   { openssl dgst -sha256 -mac HMAC -macopt "hexkey:$1" -binary | hex; } # <key hex> < msg
+
+# hmac <key hex> < msg -> hex. Built on plain SHA-256 so the key stays out of openssl's argv, which other users can read.
+# ponytail: keys up to the 64-byte block only (ours are 16 or 32), hash a longer key first if one ever appears
+hmac() {
+  local key inner outer i ipad=() opad=()
+  printf -v key '%s%0128d' "$1" 0
+  for ((i = 0; i < 64; i++)); do ipad[i]=$((16#${key:i*2:2} ^ 0x36)); opad[i]=$((16#${key:i*2:2} ^ 0x5c)); done
+  printf -v inner '\\x%02x' "${ipad[@]}"; printf -v outer '\\x%02x' "${opad[@]}"
+  { printf "$outer"; { printf "$inner"; cat; } | openssl dgst -sha256 -binary; } | sha256
+}
+
+# aes <kEnc hex> <iv hex> [-d] < in -> AES-256-CBC out
+# ponytail: kEnc reaches openssl's argv (enc takes a raw key only as -K), so other local users can read messages but not
+# forge them (kMac stays out), an AES helper that reads the key on stdin if that matters
+aes() { openssl enc ${3:+"$3"} -aes-256-cbc -K "$1" -iv "$2"; }
 
 # derive <key.pem> <peer pub b64> -> K hex
 derive() {
@@ -33,7 +47,7 @@ seal() {
   local ke km iv ct
   ke=$(printf enc | hmac "$1"); km=$(printf mac | hmac "$1")
   iv=${5:-$(openssl rand -hex 16)}
-  ct=$(openssl enc -aes-256-cbc -K "$ke" -iv "$iv" | b64)
+  ct=$(aes "$ke" "$iv" | b64)
   printf '{"v":1,"seq":%d,"dir":"%s","iv":"%s","ct":"%s","tag":"%s"}' "$4" "$3" \
     "$(printf %s "$iv" | unhex | b64)" "$ct" "$(tag "$km" "$2" "$3" "$4" "$iv" "$ct" | unhex | b64)"
 }
@@ -47,7 +61,7 @@ open() {
   # double-HMAC compare, so string comparison timing leaks nothing useful
   [ "$(tag "$km" "$2" "$3" "$4" "$iv" "$6" | hmac "$km")" = "$(printf %s "$7" | unb64 | hex | hmac "$km")" ] \
     || { echo "asku: bad tag" >&2; return 1; }
-  printf %s "$6" | unb64 | openssl enc -d -aes-256-cbc -K "$ke" -iv "$iv"
+  printf %s "$6" | unb64 | aes "$ke" "$iv" -d
 }
 
 # fragment <pubA b64> <T hex> -> "<sha256(pubA) hex>.<T hex>"
