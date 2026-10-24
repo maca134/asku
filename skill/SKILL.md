@@ -50,6 +50,10 @@ Below, `ask` means whichever script you use.
 Exit codes, check every time:
 - `0`: answer JSON on stdout. It may be an `error` answer instead (see Answer format). If stderr says batches are still open, run `ask wait` again for their answers.
 - `2`: stdout starts with `PENDING`: the user hasn't answered yet. Show the first link to the user verbatim; later messages repeat it only in case they lost the page. Then run `ask wait` (again, as often as needed).
+  Put the link in your own reply, not only in tool output, and send it before you `wait`: a user who is asked to
+  approve a blocking `wait` may not have seen it. If your tool can run `wait` in the background, do that, so the
+  user can still reach you in chat while you wait. While it runs, run no other `ask` command in that session: they
+  read the same messages, and one of them fails verification.
 - `1`: error on stderr, with the command to run next where there is one.
 - `3`: the user pressed **STOP**. Stdout has a `{"stop":true}` line (and anything else the call returned). Stop your
   work at once: start nothing new, and ask the user in your own chat, or with one `ask ask`, how to go on.
@@ -69,7 +73,9 @@ tool timeout of 10 minutes (Claude Code's Bash: `timeout: 600000`), or set `ASKU
 
 0. Starting a new task? Run `ask close` first, so a session left over from earlier can't swallow your questions.
 1. Write the questions to a file and run `ask ask q.json`. The first call exits `2` right away with the link.
-2. Run `ask wait` until it exits `0`.
+2. Run `ask wait` until it exits `0`. If you loop it in a script or a background job, loop only on exit `2` with
+   nothing printed before `PENDING`, and stop on anything else: a message also ends `wait` with exit `2`, and a STOP
+   (exit `3`) is reported only once, so running `wait` again loses it; an error (exit `1`) needs you, not a retry.
 3. Ask follow-ups with more `ask ask` calls in the same session, one form at a time: the next `ask` is refused until the last one is answered.
 4. Run `ask close` when done.
 
