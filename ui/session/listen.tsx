@@ -107,12 +107,20 @@ export function listen(session: Session) {
   const reject = async (seq: number, problem: string) => {
     const error = `invalid question: ${problem}`.slice(0, 2000);
     const answer: Answer = { seqs: [seq], answers: {}, skipped: [], comments: {}, note: "", error };
-    await send([seq], answer).catch(() => {});
+    const told = await send([seq], answer).then(
+      () => true,
+      (error) => {
+        console.error(error);
+        return false;
+      },
+    );
     if (current) return;
     status(
       "error",
       "This question can't be shown",
-      "The agent sent a form this page doesn't understand. It has been told; wait for a corrected one.",
+      told
+        ? "The agent sent a form this page doesn't understand. It has been told; wait for a corrected one."
+        : "The agent sent a form this page doesn't understand, and telling it failed. Reload to try again.",
       live("Waiting for the agent…"),
     );
   };

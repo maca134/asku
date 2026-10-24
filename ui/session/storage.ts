@@ -86,7 +86,9 @@ export async function save(sid: string, state: State) {
     merge(state, await settle<State | undefined>(store.get(sid)));
     state.active = Date.now();
     await settle(store.put(state, sid));
-  } catch {}
+  } catch (error) {
+    console.error(error); // no IndexedDB (some private modes): the session lasts until a reload
+  }
 }
 
 export async function list() {
