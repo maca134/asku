@@ -7,5 +7,5 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
 fi
 
 cd "$CLAUDE_PROJECT_DIR"
-bun install
+bun install --frozen-lockfile
 bun run build
