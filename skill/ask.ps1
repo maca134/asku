@@ -86,7 +86,6 @@ function Test-AskuBind([byte[]]$Token, [byte[]]$PubB, [byte[]]$Bind) { Test-Asku
 # The agent's binding when it joins a browser-created session: HMAC(T, pubA), base64.
 function Get-AskuBindMac([byte[]]$Token, [byte[]]$Pub) { [Convert]::ToBase64String((Get-AskuHmac $Token $Pub)) }
 
-# ---- CLI ----------------------------------------------------------------------------------------
 if ($MyInvocation.InvocationName -eq '.') { return } # dot-sourced (tests): functions only
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12

@@ -60,7 +60,6 @@ bindok() { [ "$(printf %s "$2" | unb64 | hmac "$1" | hmac "$1")" = "$(printf %s 
 # bindmac <T hex> <pub b64> -> HMAC(T, pub) b64: the agent's binding when it joins a browser-created session
 bindmac() { printf %s "$2" | unb64 | hmac "$1" | unhex | b64; }
 
-# ---- CLI ----------------------------------------------------------------------------------------
 [ "${BASH_SOURCE[0]}" = "$0" ] || return 0 # sourced (tests): functions only
 
 S=${ASKU_HOME:-$HOME/.asku}/${ASKU_SESSION:-default}
