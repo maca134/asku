@@ -17,8 +17,10 @@ import {
   ping,
   say,
   sessionName,
+  show,
   startClock,
   status,
+  waiting,
 } from "../page";
 import type { Answer, Question, Say } from "../types";
 import { chat } from "./chat";
@@ -28,7 +30,8 @@ import { drop, markAsked, rename, save } from "./storage";
 
 export function listen(session: Session) {
   const { sid, keys, state } = session;
-  status("wait", "Connected", "Waiting for the agent's question. This page updates by itself, keep it open.");
+  // No spinner while idle: nothing is loading. The live line turns into "Reconnecting…" while the feed is down.
+  status("agent", "Connected", "This page updates by itself, keep it open.", live("Waiting for the agent's question…"));
   const opened = Date.now();
   if (!state.start) {
     state.start = opened;
@@ -86,6 +89,9 @@ export function listen(session: Session) {
     if (valid && rename(state, message.name ?? (state.name ? undefined : message.title))) save(sid, state);
     if (state.answered.includes(seq)) {
       if (valid) addToFeed(feedEvent("check", `Answered: ${batchName(message)}`));
+      // after a reload: the same "agent is working" line as before it, but only in place of "Connected", never
+      // over an error or an ended session
+      if (!current && app.querySelector(".shell-main > .state.agent")) show(waiting());
       return;
     }
     if (markAsked(state, seq)) save(sid, state);
