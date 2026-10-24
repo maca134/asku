@@ -63,7 +63,11 @@
               "md": true,
               "required": true,
               "when": true,
-              "default": { "type": "boolean" }
+              "default": { "type": "boolean" },
+              "display": {
+                "enum": ["yesno", "button"],
+                "description": "button shows one big red key: pressed is true, left alone is skipped. It never answers false."
+              }
             },
             "additionalProperties": false
           }

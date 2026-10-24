@@ -1818,6 +1818,78 @@ fieldset.q.invalid .q-num {
   outline-offset: 2px;
 }
 
+.keycap-wrap {
+  display: grid;
+  place-items: center;
+  padding: 1em 0 1.4em;
+}
+.keycap {
+  position: relative;
+  display: block;
+  width: 7.5em;
+  height: 7em;
+  border-radius: 0.9em;
+  cursor: pointer;
+  background: linear-gradient(#b81c12, #5c0c06);
+  box-shadow:
+    0 0.5em 0 #2a0603,
+    0 0.9em 1.4em -0.4em #000a;
+  transition:
+    translate 0.05s,
+    box-shadow 0.05s;
+  -webkit-tap-highlight-color: transparent;
+}
+.keycap-top {
+  position: absolute;
+  inset: 0.45em 0.7em 0.95em;
+  padding: 0.55em 0.7em;
+  border-radius: 0.65em;
+  background: linear-gradient(160deg, #ff6a5c, #e0261a 60%);
+  box-shadow: inset 0 1px 0 #fff5;
+  color: #fff;
+  font: 800 0.8em var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.keycap:not(:has(:disabled)):active,
+.keycap:has(:checked) {
+  translate: 0 0.38em;
+  box-shadow:
+    0 0.12em 0 #2a0603,
+    0 0.4em 0.6em -0.25em #000a;
+}
+.keycap::after {
+  content: "";
+  position: absolute;
+  top: 1.2em;
+  right: 1.35em;
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: #4a0a05;
+  box-shadow: inset 0 1px 2px #0008;
+  transition:
+    background-color 0.15s,
+    box-shadow 0.15s;
+}
+.keycap:has(:checked)::after {
+  background: #7dffb0;
+  box-shadow:
+    0 0 0.35em #3ddc84,
+    0 0 0.9em #3ddc84;
+}
+.keycap:has(:checked) .keycap-top {
+  background: linear-gradient(160deg, #e0463a, #b81c12 60%);
+  box-shadow: inset 0 2px 5px #0006;
+}
+.keycap:has(:disabled) {
+  cursor: default;
+}
+.keycap:has(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
 .stepper {
   display: flex;
   align-items: stretch;

@@ -78,7 +78,7 @@ Verify TAG in constant time BEFORE decrypt.
 `{ "v":1, "seq":n, "dir":"q"|"a"|"m", "iv":"…", "ct":"…", "tag":"…" }`
 
 ### Question types
-`confirm`, `single`, `multi`, `review`, `rank`, `text`, `number` (stepper or slider), `date`, plus markdown context (DOMPurify) and an implicit per-question comment field.
+`confirm` (yes/no or one big red button), `single`, `multi`, `review`, `rank`, `text`, `number` (stepper or slider), `date`, plus markdown context (DOMPurify) and an implicit per-question comment field.
 Any question can carry `when: { "id": …, "is": … }` to show only for one answer to an earlier question in its batch (`is` means "contains" for `multi`); hidden ones go in `skipped`.
 Answer shape: `{ "answers": { "<id>": value }, "skipped": [], "comments": { "<id>": "" }, "note": "" }`.
 Unanswered optional questions go in `skipped`. Questions the user hands back with "Let the agent decide" go in `delegated`. If a question fails schema validation in the browser, the agent gets back `{ …, "error": "invalid question: …" }` instead.

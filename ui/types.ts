@@ -2,7 +2,7 @@
 export type Option = string | { value: string; label?: string; md?: string };
 
 type Base = { id: string; label: string; md?: string; required?: boolean; when?: { id: string; is: string | boolean } };
-export type ConfirmItem = Base & { type: "confirm"; default?: boolean };
+export type ConfirmItem = Base & { type: "confirm"; default?: boolean; display?: "yesno" | "button" };
 export type SingleItem = Base & { type: "single"; options: Option[]; default?: string; other?: boolean };
 export type MultiItem = Base & {
   type: "multi";
