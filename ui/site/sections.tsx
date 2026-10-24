@@ -33,6 +33,18 @@ const nextLink = (label: string, href: string) => (
 
 const install = () => nextLink("Install the skill", "/install");
 
+// "40+ sessions active in the last day", from the relay; nothing under 10 or if the fetch fails
+function liveLine() {
+  const line = <p className="live-count" />;
+  fetch("/stats")
+    .then((res) => res.json())
+    .then(({ live }) => {
+      if (live >= 10) line.textContent = `${live}+ sessions active in the last day`;
+    })
+    .catch(() => {});
+  return line;
+}
+
 export const hero = () => (
   <section className="hero">
     <div className="wrap hero-copy">
@@ -51,6 +63,7 @@ export const hero = () => (
           Already chatting? Get a link
         </a>
       </div>
+      {liveLine()}
     </div>
     <div className="wrap">{demo()}</div>
   </section>

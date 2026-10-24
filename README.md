@@ -145,6 +145,7 @@ POST bodies must be `application/json`. Writes take `Authorization: Bearer <key>
 | browser | `POST /s/:sid/m` envelope, browser key | `204`; `seq` must be last m + 1, else `409` |
 | browser | `PUT /s/:sid/push` a `PushSubscription`, browser key | `204`: each new q, except a `push=0` one, sends a Web Push to it. `404` when push is off |
 | browser | `DELETE /s/:sid/push`, browser key | `204`, no more pushes for this session |
+| anyone | `GET /stats` | `{live}`: sessions on the relay, floored to tens, updated once a minute. The front page shows it from 10 |
 
 Errors are `{error}` with `400 401 404 405 409 413 429`. The relay stores only sha256 of write keys.
 
