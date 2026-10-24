@@ -121,10 +121,13 @@ start() {
   save_session "$(printf %s "$BODY" | jget sid)" "$(printf %s "$BODY" | jget key)"
 }
 
-# join <agent link>: join a session the user started on the website. resume then prints their opening note.
+# join [agent link]: join a session the user started on the website. resume then prints their opening note.
+# Without one it reads the link from stdin, keeping T out of this process's argv while it waits.
 join() {
+  local link=${1:-}
+  [ -n "$link" ] || link=$(tr -d ' \r\n')
   [ ! -f "$S/sid" ] || die "session '${ASKU_SESSION:-default}' is in use; run: $0 close, or set ASKU_SESSION"
-  [[ ${1:-} =~ ^(https?://[^/#]+)/j/([A-Za-z0-9_-]{22})#([0-9a-f]{64})\.([0-9a-f]{32})$ ]] || die "not an asku agent link: ${1:-}"
+  [[ $link =~ ^(https?://[^/#]+)/j/([A-Za-z0-9_-]{22})#([0-9a-f]{64})\.([0-9a-f]{32})$ ]] || die "not an asku agent link: $link"
   BASE=${BASH_REMATCH[1]}
   local sid=${BASH_REMATCH[2]} hash=${BASH_REMATCH[3]} t=${BASH_REMATCH[4]} pub k
   req GET "/s/$sid" || die "relay unreachable: $BASE"
@@ -371,7 +374,7 @@ case "$CMD" in
     cat >&2 <<USAGE
 usage: $0 ask <questions.json | ->   send a question, print the answer JSON
        $0 add <questions.json | ->   append questions to the open form without waiting
-       $0 join <agent link>          join a session the user started, print their opening note
+       $0 join [agent link]          join a session the user started, print their opening note
        $0 say <text>                 show a one-way update on the user's page
          [--progress <done>/<total>]  as a progress bar labelled <text>; same label, same bar
        $0 wait                       keep waiting after PENDING
