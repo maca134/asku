@@ -135,9 +135,10 @@ const clients = [
 function agent(cmd: string[], env: Record<string, string>) {
   const home = mkdtempSync(join(tmpdir(), "asku-")).replaceAll("\\", "/");
   writeFileSync(`${home}/q.json`, JSON.stringify(question));
-  const run = async (args: string[], wait = env.ASKU_WAIT) => {
+  const run = async (args: string[], wait = env.ASKU_WAIT, stdin?: string) => {
     const p = Bun.spawn([...cmd, ...args], {
       env: { ...process.env, ...env, ASKU_HOME: home, ASKU_WAIT: wait },
+      stdin: stdin === undefined ? "ignore" : new Blob([stdin]),
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -445,7 +446,8 @@ for (const c of clients) {
       expect(res.code).toBe(1);
       expect(res.err).toContain("doesn't match");
 
-      const joining = run(["join", u.link]);
+      // the link on stdin keeps T out of the client's argv; CRLF as PowerShell pipes it
+      const joining = run(["join"], undefined, `${u.link}\r\n`);
       const note = "Zoë: please fix the build — 日本語";
       const s = await u.joined(note);
       res = await joining;

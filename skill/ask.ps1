@@ -159,7 +159,9 @@ function Start-AskuSession {
 }
 
 # Joins a session the user started on the website. Resume-Asku then prints their opening note.
+# Without a link it reads one from stdin, keeping T out of this process's command line while it waits.
 function Join-AskuSession([string]$Link) {
+    if (-not $Link) { $Link = [Console]::In.ReadToEnd().Trim() }
     if (Test-Path (Join-Path $S 'sid')) { Fail "session is in use; run: $Self close, or set ASKU_SESSION" }
     if ($Link -notmatch '^(https?://[^/#]+)/j/([A-Za-z0-9_-]{22})#([0-9a-f]{64})\.([0-9a-f]{32})$') { Fail "not an asku agent link: $Link" }
     $script:Base = $Matches[1]
@@ -384,7 +386,7 @@ function Wait-Asku {
 $usage = @"
 usage: $Self ask <questions.json>   send a question, print the answer JSON
        $Self add <questions.json>   append questions to the open form without waiting
-       $Self join <agent link>      join a session the user started, print their opening note
+       $Self join [agent link]      join a session the user started, print their opening note
        $Self say "<text>"           show a one-way update on the user's page
          [--progress <done>/<total>]  as a progress bar labelled <text>; same label, same bar
        $Self wait                   keep waiting after PENDING
