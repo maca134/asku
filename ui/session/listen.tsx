@@ -143,7 +143,7 @@ export function listen(session: Session) {
     });
     events.addEventListener("q", (event) => {
       const seq = Number(event.lastEventId);
-      last = Math.max(last, seq);
+      if (Number.isSafeInteger(seq)) last = Math.max(last, seq);
       queue(() => receive(seq, event.data));
     });
     events.addEventListener("close", end);
