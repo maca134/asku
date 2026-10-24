@@ -9,6 +9,7 @@
     "test": "bun test",
     "typecheck": "tsc -p .",
     "check": "biome check .",
+    "e2e": "bun test/e2e-cloud.ts",
     "vectors": "bun test/gen-vectors.ts > test/vectors.json"
   },
   "devDependencies": {

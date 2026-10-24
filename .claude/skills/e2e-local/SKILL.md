@@ -36,6 +36,12 @@ answer comes back decrypted.
 2. `join '<link>'` (quoted, it has a `#`): prints `{"note": "..."}` with your note. The page says "Connected".
 3. `close`.
 
+## Cloud sessions
+
+No browser pane there. `bun run build`, then `bun run e2e` (`test/e2e-cloud.ts`) runs both flows above against an
+in-process relay, with the real page in the pre-installed headless Chromium. It drives a small confirm + text form,
+not the optional `add`/`say`/invalid-form steps.
+
 ## Gotchas
 
 - When the browser pane is hidden, background tabs are throttled: `requestAnimationFrame` pauses and timers slow to
