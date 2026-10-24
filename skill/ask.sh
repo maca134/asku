@@ -2,7 +2,7 @@
 # asku agent client. Needs bash (3.2 or later), curl and OpenSSL >= 1.1.1 or LibreSSL (macOS ships both bash and LibreSSL).
 set -euo pipefail
 
-VERSION=1.5.5 # keep in step with ask.ps1
+VERSION=1.5.6 # keep in step with ask.ps1
 
 SPKI_P256=3059301306072a8648ce3d020106082a8648ce3d030107034200
 
