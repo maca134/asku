@@ -328,6 +328,9 @@ function Show-AskuMessages($Keys, [string]$Sid, $Envelopes) {
     $shown = 0
     foreach ($e in @($Envelopes | Where-Object { $_.dir -eq 'm' })) {
         $seq = [int](Get-State 'm' 0) + 1
+        # an overlapping call (a background wait and a say) already printed it; the relay could withhold it anyway
+        $claimed = $e.seq -as [long]
+        if ($null -ne $claimed -and $claimed -lt $seq) { continue }
         try { $text = [Text.Encoding]::UTF8.GetString((Unprotect-AskuMessage $Keys $Sid 'm' $seq $e)) } catch { Fail 'a message failed verification' }
         [Console]::Out.Write($text + "`n")
         Set-State 'm' $seq

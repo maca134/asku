@@ -35,6 +35,21 @@ const recorder = Bun.serve({
 afterAll(() => recorder.stop(true));
 const recorded = recorder.url.href.replace(/\/$/, "");
 
+// In front of the relay for the agent client: asks for every message again, as a call that overlaps another
+// (a background wait and a say) sees ones the other already printed.
+const stale = Bun.serve({
+  port: 0,
+  async fetch(req) {
+    const url = new URL(req.url);
+    if (req.method === "GET" && url.pathname.endsWith("/m")) url.searchParams.set("after", "0");
+    if (url.searchParams.has("m")) url.searchParams.set("m", "0");
+    const body = req.method === "GET" || req.method === "HEAD" ? undefined : await req.arrayBuffer();
+    return fetch(base + url.pathname + url.search, { method: req.method, headers: req.headers, body });
+  },
+});
+afterAll(() => stale.stop(true));
+const replayed = stale.url.href.replace(/\/$/, "");
+
 const post = (path: string, body: unknown, key?: string) =>
   fetch(base + path, {
     method: "POST",
@@ -372,6 +387,32 @@ for (const c of clients) {
       res = await run(["say", "stopped"]);
       expect([res.code, res.out]).toEqual([0, "Said.\n"]); // each message only once
       expect((await b.question(3)).say).toBe("stopped");
+
+      expect((await run(["close"])).code).toBe(0);
+    },
+    120_000,
+  );
+
+  test.skipIf(!c.on)(
+    `${c.name} skips messages an overlapping call already printed`,
+    async () => {
+      const { home, run } = agent(c.cmd, { ASKU_URL: replayed, ASKU_SESSION: "t", ASKU_WAIT: "30" });
+      const lines = (out: string) => out.trimEnd().split("\n");
+      const link = (await run(["ask", `${home}/q.json`])).out.match(/https?:\/\/\S+#\S+/)![0];
+      const b = await browser(link);
+
+      const waiting = run(["wait"]);
+      await b.question(1);
+      await b.message(1, { message: "one" });
+      let res = await waiting;
+      expect([res.code, lines(res.out)[0]]).toEqual([2, '{"message":"one"}']);
+
+      // the relay hands back message 1 again: only message 2 is new, and nothing fails verification
+      await b.message(2, { message: "two" });
+      res = await run(["say", "hi"]);
+      expect([res.code, lines(res.out), res.err]).toEqual([0, ['{"message":"two"}', "Said."], ""]);
+      res = await run(["say", "again"]);
+      expect([res.code, res.out]).toEqual([0, "Said.\n"]);
 
       expect((await run(["close"])).code).toBe(0);
     },

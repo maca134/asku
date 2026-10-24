@@ -164,11 +164,14 @@ envelopes() { local list=${1#[} nl=$'}\n{'; list=${list%]}; printf '%s\n' "${lis
 
 # messages < envelopes: prints the user's messages (dir m) in order, each once. Sets SHOWN, and STOP on a stop.
 messages() {
-  local e seq text
+  local e seq text claimed
   SHOWN=
   while IFS= read -r e; do
     [ "$(printf %s "$e" | jget dir)" = m ] || continue
     seq=$(( $(state m 0) + 1 ))
+    # an overlapping call (a background wait and a say) already printed it; the relay could withhold it anyway
+    claimed=$(printf %s "$e" | jget seq)
+    [[ ! $claimed =~ ^[0-9]{1,9}$ ]] || [ "$claimed" -ge "$seq" ] || continue
     text=$(open "$(state K)" "$(state sid)" m "$seq" "$(printf %s "$e" | jget iv)" "$(printf %s "$e" | jget ct)" \
       "$(printf %s "$e" | jget tag)") || die "a message failed verification"
     printf '%s\n' "$text"
