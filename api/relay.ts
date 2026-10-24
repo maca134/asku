@@ -201,9 +201,10 @@ export function relay({
   function rateLimited(ip: string) {
     const now = Date.now();
     const times = (recentCreates.get(ip) ?? []).filter((time) => now - time < LIMITS.createWindowMs);
-    times.push(now);
     recentCreates.set(ip, times);
-    return times.length > LIMITS.createPerIp;
+    if (times.length >= LIMITS.createPerIp) return true; // rejected attempts aren't recorded, so the list stays bounded
+    times.push(now);
+    return false;
   }
 
   // Built frontend (bun run build). Paths are matched by strict regexes before reaching here.
@@ -268,12 +269,15 @@ export function relay({
     return sql.has.get(session.sid, "q", seq) !== null;
   }
 
-  async function post(req: Request, session: Session, direction: Direction, push: boolean) {
-    const { sid } = session;
-    const keyHash = direction === "q" ? session.agentKeyHash : session.browserKeyHash;
+  async function post(req: Request, before: Session, direction: Direction, push: boolean) {
+    const { sid } = before;
+    const keyHash = direction === "q" ? before.agentKeyHash : before.browserKeyHash;
     if (!authorized(req, keyHash)) return fail(401, "unauthorized");
     const envelope = validEnvelope(await readJson(req), direction);
     if (!envelope) return fail(400, "bad envelope");
+    // Re-read after the body: the session may have been deleted or grown meanwhile. No await from here to store().
+    const session = sql.session.get(sid);
+    if (!session) return fail(404, "no such session");
     const { seq } = envelope;
     // "duplicate": that seq is already stored, so a retry can count as sent; "bad seq" is a real conflict
     if (sql.has.get(sid, direction, seq)) return fail(409, "duplicate");
@@ -281,11 +285,7 @@ export function relay({
     const size = envelope.json.length;
     if (session.bytes + size > LIMITS.sessionBytes) return fail(413, "session full");
     if (sql.totals.get()!.bytes + size > LIMITS.totalBytes) return fail(503, "relay full");
-    try {
-      store(sid, direction, seq, envelope.json);
-    } catch {
-      return fail(409, "duplicate"); // lost a race with an identical seq
-    }
+    store(sid, direction, seq, envelope.json);
     notify(sid);
     if (direction === "q" && push) pushQuestion(session, seq);
     return empty();
