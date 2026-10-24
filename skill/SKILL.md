@@ -122,7 +122,8 @@ and `total` are whole numbers, `0 <= done <= total` and `total >= 1`; anything e
 
 - `questions`: 1 to 50 items. `id` matches `[A-Za-z0-9_-]{1,64}`, `label` is required.
 - Types and their extra fields:
-  - `confirm`: yes/no. `default` boolean.
+  - `confirm`: yes/no. `default` boolean. `display: "button"` shows one big red key instead: pressed is `true`,
+    left alone is skipped, never `false`. For a go/no-go where not pressing is the safe answer.
   - `single`: pick one. `options` required, `default` string, `other`.
   - `multi`: pick several. `options` required, `default` string[], `min`, `max`, `other`.
   - `review`: approve or reject each option (a list of proposed changes, files, steps). `options` required, no

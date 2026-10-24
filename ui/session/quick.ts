@@ -4,11 +4,11 @@ import { conditionProblem } from "../form/when";
 import { question as validQuestion } from "../gen/validate.js";
 import type { Answer, ConfirmItem } from "../types";
 
-// A nervous agent wants the whole page looked at, not a tap on the lock screen.
+// A nervous agent wants the whole page looked at, not a tap on the lock screen. A button never answers No.
 export function quickConfirm(message: unknown): ConfirmItem | null {
   if (!validQuestion(message) || conditionProblem(message.questions) || message.mood === "nervous") return null;
   const [item, ...rest] = message.questions;
-  return item.type === "confirm" && !rest.length ? item : null;
+  return item.type === "confirm" && item.display !== "button" && !rest.length ? item : null;
 }
 
 // Field for field what the page's form sends for one answered confirm.

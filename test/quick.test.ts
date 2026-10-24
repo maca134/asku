@@ -15,6 +15,7 @@ test("anything else opens the page instead", () => {
   expect(quickConfirm({ questions: [confirm, { ...confirm, id: "tag" }] })).toBeNull();
   expect(quickConfirm({ questions: [{ id: "name", type: "text", label: "Name?" }] })).toBeNull();
   expect(quickConfirm({ questions: [confirm], mood: "nervous" })).toBeNull();
+  expect(quickConfirm({ questions: [{ ...confirm, display: "button" }] })).toBeNull();
   expect(quickConfirm({ say: "Deploying now" })).toBeNull();
   expect(quickConfirm({ questions: [{ id: "ship", type: "confirm" }] })).toBeNull();
   expect(quickConfirm({ questions: [{ ...confirm, when: { id: "ship", is: true } }] })).toBeNull(); // the page rejects it

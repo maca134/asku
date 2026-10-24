@@ -102,6 +102,13 @@ test("date: a day, or a day and time with time: true", () => {
   expect(valid("answer", { answers: { x: "2026-10-24T09:30+07:00" }, skipped: [] })).toBe(true);
 });
 
+test("confirm: display yesno or button", () => {
+  expect(valid("question", q({ type: "confirm", display: "button", required: true }))).toBe(true);
+  expect(valid("question", q({ type: "confirm", display: "yesno" }))).toBe(true);
+  expect(valid("question", q({ type: "confirm", display: "slider" }))).toBe(false);
+  expect(valid("question", q({ type: "single", options: ["a"], display: "button" }))).toBe(false);
+});
+
 test("number: display slider needs min and max", () => {
   const slider = { type: "number", display: "slider", min: 0, max: 100 };
   expect(valid("question", q(slider))).toBe(true);

@@ -47,6 +47,55 @@ function confirmControl(item: ConfirmItem, name: string): Control {
   };
 }
 
+// A short noise burst and a falling low tone read as a mechanical key's thock.
+let audio: AudioContext | undefined;
+function thock() {
+  audio ??= new AudioContext();
+  const now = audio.currentTime;
+  const burst = audio.createBuffer(1, audio.sampleRate * 0.04, audio.sampleRate);
+  const samples = burst.getChannelData(0);
+  for (let i = 0; i < samples.length; i++) samples[i] = (Math.random() * 2 - 1) * (1 - i / samples.length) ** 3;
+  const noise = audio.createBufferSource();
+  noise.buffer = burst;
+  const muffle = audio.createBiquadFilter();
+  muffle.frequency.value = 1800;
+  const tone = audio.createOscillator();
+  tone.frequency.setValueAtTime(180, now);
+  tone.frequency.exponentialRampToValueAtTime(60, now + 0.08);
+  const volume = audio.createGain();
+  volume.gain.setValueAtTime(0.5, now);
+  volume.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+  noise.connect(muffle).connect(volume);
+  tone.connect(volume);
+  volume.connect(audio.destination);
+  noise.start(now);
+  tone.start(now);
+  tone.stop(now + 0.1);
+}
+
+// One big red key that stays down once pressed: true, or skipped. "Clear answer" is the way back up.
+function buttonControl(item: ConfirmItem): Control {
+  const input = h("input", { type: "checkbox", checked: item.default === true, className: "sr-only" });
+  input.onclick = (event) => {
+    if (!input.checked) event.preventDefault();
+  };
+  input.onkeydown = (event) => {
+    if (event.key === " " && !event.repeat && !input.checked) thock();
+  };
+  const key = (
+    <label
+      className="keycap"
+      onpointerdown={() => {
+        if (!input.checked && !input.disabled) thock();
+      }}
+    >
+      {input}
+      <span className="keycap-top">Press</span>
+    </label>
+  );
+  return { elements: [<div className="keycap-wrap">{key}</div>], value: () => (input.checked ? true : undefined) };
+}
+
 const option = (choice: Option) =>
   typeof choice === "string" ? { value: choice, label: choice } : { ...choice, label: choice.label ?? choice.value };
 
@@ -359,7 +408,7 @@ function dateControl(item: DateItem): Control {
 function control(item: Item, name: string) {
   switch (item.type) {
     case "confirm":
-      return confirmControl(item, name);
+      return item.display === "button" ? buttonControl(item) : confirmControl(item, name);
     case "single":
     case "multi":
       return choiceControl(item, name);
@@ -377,7 +426,7 @@ function control(item: Item, name: string) {
 }
 
 const LOCKABLE =
-  ".opts input, .opts button, .seg input, .stepper input, .stepper button, .slider input, :scope > .input, :scope > .clear";
+  ".opts input, .opts button, .seg input, .keycap input, .stepper input, .stepper button, .slider input, :scope > .input, :scope > .clear";
 
 export type Field = ReturnType<typeof field>;
 
