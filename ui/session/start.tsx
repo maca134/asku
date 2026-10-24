@@ -1,6 +1,6 @@
 // The reverse flow: the user starts a session here and hands the agent a link.
 import { type Bytes, checkBind, deriveKeys, fragmentFor, newKeyPair } from "../../shared/crypto";
-import { codeSpans, h, icon, sleep } from "../dom";
+import { h, icon, sleep } from "../dom";
 import { copyable, installLine, live, newSessionLink, show, status } from "../page";
 import { listen } from "./listen";
 import { post, sendAnswer } from "./send";
@@ -74,9 +74,7 @@ export async function waitForAgent(sid: string, state: State) {
       <div className="state-icon agent">{icon("link")}</div>
       <h1>Give this link to your agent</h1>
       <p className="state-detail">
-        {codeSpans(
-          "Paste it into your chat with the agent. It joins with the asku skill (`ask join <link>`) and asks its questions right here.",
-        )}
+        Paste it into your chat with the agent. It joins with the asku skill and asks its questions right here.
       </p>
       {copyable(link, undefined, "Agent link")}
       {live("Waiting for your agent to join…")}
