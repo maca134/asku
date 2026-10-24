@@ -30,6 +30,8 @@ export function openStore(path: string) {
   db.run(`create table if not exists messages (
     sid text not null, direction text not null, seq integer not null, envelope text not null,
     primary key (sid, direction, seq)) without rowid`);
+  // messages a post stored after its session was purged, before post() re-read the session
+  db.run("delete from messages where sid not in (select sid from sessions)");
 
   const sql = {
     session: db.query<Session, [string]>("select * from sessions where sid = ?"),

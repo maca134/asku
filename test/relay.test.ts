@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { afterAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -104,6 +105,80 @@ test("rate limits session creation per IP", async () => {
   own.stop();
   expect(statuses.at(-2)).toBe(201);
   expect(statuses.at(-1)).toBe(429);
+});
+
+test("rejected creates don't extend the rate-limit window", async () => {
+  const window = LIMITS.createWindowMs;
+  LIMITS.createWindowMs = 300;
+  const own = relay();
+  const make = async () =>
+    (
+      await fetch(`${own.server.url.href}s`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ pub: v.pubA }),
+      })
+    ).status;
+  try {
+    for (let i = 0; i < LIMITS.createPerIp; i++) expect(await make()).toBe(201);
+    await Bun.sleep(150);
+    for (let i = 0; i < LIMITS.createPerIp + 5; i++) expect(await make()).toBe(429);
+    await Bun.sleep(200); // the accepted ones have left the window; the rejected ones never entered it
+    expect(await make()).toBe(201);
+  } finally {
+    LIMITS.createWindowMs = window;
+    own.stop();
+  }
+});
+
+test("a post that outlives its session's deletion stores nothing", async () => {
+  const path = `${mkdtempSync(`${tmpdir()}/asku-`)}/race.db`;
+  const own = relay({ db: path });
+  const url = own.server.url.href.replace(/\/$/, "");
+  const auth = (key: string) => ({ "content-type": "application/json", authorization: `Bearer ${key}` });
+  const { sid, key } = await (
+    await fetch(`${url}/s`, { method: "POST", headers: auth(""), body: JSON.stringify({ pub: v.pubA }) })
+  ).json();
+  const body = JSON.stringify(env("q", 1));
+  let send = (_: string) => {};
+  const stream = new ReadableStream<string>({
+    start(controller) {
+      controller.enqueue(body.slice(0, 10));
+      send = (rest) => {
+        controller.enqueue(rest);
+        controller.close();
+      };
+    },
+  }).pipeThrough(new TextEncoderStream());
+  const posting = fetch(`${url}/s/${sid}/q`, { method: "POST", headers: auth(key), body: stream });
+  await Bun.sleep(100);
+  expect((await fetch(`${url}/s/${sid}`, { method: "DELETE", headers: auth(key) })).status).toBe(204);
+  send(body.slice(10));
+  expect((await posting).status).toBe(404);
+  own.stop();
+  const db = new Database(path);
+  expect(db.query("select count(*) n from messages").get()).toEqual({ n: 0 });
+  db.close();
+});
+
+test("a failed write is a 500, not a duplicate the client would count as sent", async () => {
+  const path = `${mkdtempSync(`${tmpdir()}/asku-`)}/fail.db`;
+  const own = relay({ db: path });
+  const url = own.server.url.href.replace(/\/$/, "");
+  const auth = (key: string) => ({ "content-type": "application/json", authorization: `Bearer ${key}` });
+  const { sid, key } = await (
+    await fetch(`${url}/s`, { method: "POST", headers: auth(""), body: JSON.stringify({ pub: v.pubA }) })
+  ).json();
+  const db = new Database(path);
+  db.run("create trigger full before insert on messages begin select raise(abort, 'disk full'); end");
+  db.close();
+  const res = await fetch(`${url}/s/${sid}/q`, {
+    method: "POST",
+    headers: auth(key),
+    body: JSON.stringify(env("q", 1)),
+  });
+  own.stop();
+  expect(res.status).toBe(500);
 });
 
 test("an IPv6 /64 shares one rate-limit quota", async () => {

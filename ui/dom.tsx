@@ -82,7 +82,12 @@ DOMPurify.addHook("afterSanitizeAttributes", (node) => {
   }
 });
 // markdown can't draw controls of its own, so the agent's text can't pose as a field of the form
-const NO_CONTROLS = { FORBID_TAGS: ["form", "input", "button", "textarea", "select", "option"] };
+// nor borrow the app's classes, ids and roles to look like one
+const NO_CONTROLS = {
+  FORBID_TAGS: ["form", "input", "button", "textarea", "select", "option"],
+  FORBID_ATTR: ["class", "id", "role", "tabindex", "for", "name", "style"],
+  ALLOW_ARIA_ATTR: false,
+};
 
 export function markdown(source: string, className = "") {
   const div = <div className={`md ${className}`} />;
