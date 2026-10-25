@@ -14,13 +14,16 @@ Install the skill at https://asku.dev/skill.md
 
 It saves the skill and one script for your OS. Next time it needs a decision, it sends you a link. Or start from [asku.dev/start](https://asku.dev/start) and paste the link it gives you into your chat.
 
+It works with other skills too: add "with asku" to any skill that asks you questions, e.g. `/grill-me with asku`.
+
 ## Why
 
 - **No app, no account.** The form is a web page; open the link on any phone, tablet or browser.
 - **End-to-end encrypted.** Keys are made on the agent's machine and in your browser. The relay only stores ciphertext, and deletes it when the session ends.
 - **Nothing to run on the agent side** beyond one script: `ask.sh` (bash, curl, OpenSSL) or `ask.ps1` (PowerShell). No MCP server, no daemon.
 - **Any agent** that can run shell commands: Claude Code, Codex, Cursor, Gemini CLI.
-- **Rich answers.** Yes/no, pick one, pick several, text, numbers and dates, with markdown context and a comment box on every question.
+- **Rich answers.** Yes/no, pick one, pick several, rank, approve/reject, text, numbers and dates, with markdown context, a comment box and "Let the agent decide" on every question.
+- **Both ways.** The agent can post progress updates to your page, and you can message it or press STOP from your phone.
 - **Open source** (MIT), small enough to audit, and you can [run your own relay](#deploy).
 
 ## Protocol
@@ -81,7 +84,7 @@ Verify TAG in constant time BEFORE decrypt.
 `confirm` (yes/no or one big red button), `single`, `multi`, `review`, `rank`, `text`, `number` (stepper or slider), `date`, plus markdown context (DOMPurify) and an implicit per-question comment field.
 Any question can carry `when: { "id": …, "is": … }` to show only for one answer to an earlier question in its batch (`is` means "contains" for `multi`); hidden ones go in `skipped`.
 Answer shape: `{ "answers": { "<id>": value }, "skipped": [], "comments": { "<id>": "" }, "note": "" }`.
-Unanswered optional questions go in `skipped`. Questions the user hands back with "Let the agent decide" go in `delegated`. If a question fails schema validation in the browser, the agent gets back `{ …, "error": "invalid question: …" }` instead.
+Unanswered optional questions go in `skipped`. Questions the user hands back with "Let the agent decide" go in `delegated`. A user who declines the form sends `{ "answers": {}, "skipped": [<its ids>], …, "note": "<why>", "declined": true }`. If a question fails schema validation in the browser, the agent gets back `{ …, "error": "invalid question: …" }` instead.
 - `deadline` (seconds) on a form: the page counts down and locks the batch at zero. The client stops waiting then and prints `{ "seqs": […], "answers": {}, "skipped": [<its ids>], …, "timeout": true }`. When the client queues the batch it adds `sent` (unix seconds), so the page counts from when the agent asked, not from when the page opened. Queue numbers can have gaps after a timeout; the client numbers messages on the wire from the last one it sent.
 - `mood` on a form changes how the page looks (`confident`, `excited`, `nervous`, `begging`, `grumpy`, `sheepish`).
 - A `say` message `{ "say": "<markdown>" }` is a one-way update shown in the page's feed. It takes a question seq but is never answered. With `"progress": { "done": n, "total": m }` (`0 <= n <= m`, `m >= 1`) it is a progress bar labelled by `say`; a later one with the same `say` moves that bar.
@@ -90,7 +93,7 @@ Unanswered optional questions go in `skipped`. Questions the user hands back wit
 Plaintext shapes are defined in [`schema.json`](schema.json).
 
 ### Frontend
-[`ui/`](ui): `bun run build` writes `dist/` (hashed assets with SRI; the schema validator is compiled at build time because the CSP forbids eval). The relay serves the site's pages (`/`, `/how`, `/security`, `/demo`, `/install`, `/start`, `/terms`, each with its own head and static copy from [`ui/site/pages.ts`](ui/site/pages.ts)), `/a/:sid` (answer) and `/j/:sid` (tells a human that link is for the agent, `noindex`) from it, the files in [`ui/static/`](ui/static) (icons, share image, `robots.txt`, `sitemap.xml`), plus the skill: `/skill.md` ([`skill/SKILL.md`](skill/SKILL.md)), `/ask.sh`, `/ask.ps1` and `/schema.json`.
+[`ui/`](ui): `bun run build` writes `dist/` (hashed assets with SRI; the schema validator is compiled at build time because the CSP forbids eval). The relay serves the site's pages (`/`, `/how`, `/security`, `/demo`, `/install`, `/start`, `/sessions`, `/terms`, each with its own head and static copy from [`ui/site/pages.ts`](ui/site/pages.ts), and a `sitemap.xml` of them), `/a/:sid` (answer) and `/j/:sid` (tells a human that link is for the agent, `noindex`) from it, the files in [`ui/static/`](ui/static) (icons, share image, `robots.txt`), plus the skill: `/skill.md` ([`skill/SKILL.md`](skill/SKILL.md)), `/ask.sh`, `/ask.ps1` and `/schema.json`.
 The page keeps key pair B (non-extractable) and its write key in IndexedDB, so a reload or a closed tab carries on. The relay rejects a second binding, so the session stays tied to the first browser that opened it.
 
 ### Agent CLI
@@ -98,7 +101,7 @@ The page keeps key pair B (non-extractable) and its write key in IndexedDB, so a
 ```
 ask.sh ask <questions.json | ->   # ask.ps1 ask <questions.json>
 ask.sh add <questions.json | ->   # append to the open form without waiting
-ask.sh join <agent link>          # session the user started on the website; prints {"note": …}
+ask.sh join < link.txt            # session the user started on the website; prints {"note": …}
 ask.sh say <text>                 # one-way update on the page; queued until the user opens the link
 ask.sh say <label> --progress 42/50  # a progress bar; the same label moves the same bar
 ask.sh wait
@@ -110,7 +113,7 @@ ask.sh version                    # client version, same in both scripts
 - The first `ask` creates the session and returns `PENDING` right away with the link, so the agent can hand it to the user.
 - One question message per round: the next `ask` is refused until the last one is answered.
 - If the binding fails the token check, the session is deleted and the command exits `1`.
-- `join` refuses a link whose hash doesn't match the session's key, and a session name already in use. A joined session talks to the relay in its link, whatever `ASKU_URL` says.
+- `join` reads the agent link from stdin, so its token never shows in the process list (`join <link>` still works). It refuses a link whose hash doesn't match the session's key, and a session name already in use. A joined session talks to the relay in its link, whatever `ASKU_URL` says.
 - State lives in `~/.asku/<session>/` (`ask.sh` creates it mode 700). The agent private key never leaves it.
 - Env: `ASKU_URL` (default `https://asku.dev`), `ASKU_SESSION` (default `default`), `ASKU_HOME`, `ASKU_WAIT` (seconds before `PENDING`, default 500).
 
