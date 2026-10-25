@@ -37,6 +37,10 @@ export const PAGES: Record<string, Page> = {
         "Built-in questions appear in the terminal, so you have to be at it. asku sends the form to a link you can open on your phone or any browser, with markdown context and a comment box on every question, and it works with any agent, not just one.",
       ],
       [
+        "Does it work with other skills?",
+        'Yes. Any skill that asks you questions can send them through asku instead: add "with asku", as in `/grill-me with asku`. You get the full form controls even when you\'re at your desk.',
+      ],
+      [
         "Do I need an account?",
         "No. There's no sign-up, no app and no API key. A session is made when the agent first asks, and deleted when it closes or after 24 hours idle.",
       ],

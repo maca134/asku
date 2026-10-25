@@ -1,4 +1,4 @@
-// The site's pages (home, how, security, demo, install, start, terms), swapped without a reload.
+// The site's pages (home, how, security, demo, install, start, sessions, terms), swapped without a reload.
 import { app, type Child, icon, logo } from "../dom";
 import { PAGES } from "./pages";
 import {

@@ -88,7 +88,7 @@ const steps = () => (
     {step(
       "phone",
       "You answer",
-      "Tap through yes/no, choices, dates, rankings and approvals. Add comments. It's encrypted before it leaves the page.",
+      "Tap through yes/no, choices, dates, rankings and approvals. Add comments, or leave a question to the agent. It's encrypted before it leaves the page.",
     )}
     {step(
       "json",
@@ -210,6 +210,7 @@ export const homeSecurity = () => (
 
 const FEATURES = [
   "Yes / no",
+  "Big red button",
   "Pick one",
   "Pick several",
   "Write-in Other",
@@ -254,6 +255,7 @@ export const controls = () => (
 // ids are prefixed so their radio groups can't meet the demo's
 const GALLERY: Item[] = [
   { id: "ctl-go", type: "confirm", label: "Deploy v2.3 now?" },
+  { id: "ctl-nuke", type: "confirm", display: "button", label: "Wipe the staging database" },
   {
     id: "ctl-env",
     type: "single",
@@ -300,6 +302,7 @@ function typeLabel(item: Item) {
     (item.type === "single" || item.type === "multi") && item.other && "other",
     item.type === "date" && item.time && "time",
     item.type === "number" && item.display === "slider" && "slider",
+    item.type === "confirm" && item.display === "button" && "button",
   ].filter(Boolean);
   return [`type: ${item.type}`, ...flags].join(" · ");
 }

@@ -1,6 +1,6 @@
 ---
 name: asku
-description: Ask the user questions through an end-to-end encrypted form they answer on any device. Use when you need the user's input and they may be away from the terminal, or when they paste an asku.dev/j/ link.
+description: Ask the user questions through an end-to-end encrypted form they answer on any device. Use when you need the user's input and they may be away from the terminal, when they ask for asku by name, or when they paste an asku.dev/j/ link.
 argument-hint: "[<asku.dev/j/ link> | <what to ask>]"
 ---
 
@@ -95,6 +95,9 @@ questions as you think of them, use `ask add`: each batch goes to the bottom of 
 returns at once (exit `2`; the first one prints the link). Run `ask wait` when you need the answers: one answer can
 cover several batches, and the user can also send a batch on its own, so one `wait` may return only part of the form.
 Ids must be unique across the open form, and it holds 50 questions at most (`add` refuses otherwise).
+
+**With other skills.** If the user asks you to run another skill "with asku" (e.g. `/grill-me with asku`), send the
+questions that skill has you ask the user through `ask` forms, not your chat or built-in question tool.
 
 Sessions are named by `ASKU_SESSION` (default `default`). Use a different name to run separate conversations at once.
 
