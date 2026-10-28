@@ -101,9 +101,12 @@ questions that skill has you ask the user through `ask` forms, not your chat or 
 
 Sessions are named by `ASKU_SESSION` (default `default`). Use a different name to run separate conversations at once.
 
-**Status updates.** While a session is open, `ask say "Tests 42/50 passing"` posts a line to a feed on the user's page
-and exits `0` at once. Use it for progress on long work between questions; keep it to milestones, not every step.
+**Status updates.** `ask say "Tests 42/50 passing"` posts a line to a feed on the user's page and exits `0` at once.
+Use it for progress on long work between questions; keep it to milestones, not every step.
 It also prints any messages the user sent meanwhile, so during long work it is how you hear a STOP.
+`say` needs an open session: run `ask`, `add` or `join` first. To open one before you have questions, `ask add` a form
+with a `name` and one optional `confirm` with `"display": "button"` (e.g. "Start?"): it exits `2` with the link,
+blocks nothing, and a press only means go. While it is unanswered, send later questions with `ask add`, not `ask ask`.
 
 **Progress bars.** For counted work, `ask say "Tests" --progress 42/50` shows a bar instead of a line. Later updates
 with the same label move that bar rather than adding new lines, and it shows complete when done equals total. `done`
