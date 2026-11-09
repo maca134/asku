@@ -19,7 +19,7 @@
     "ajv": "^8.17.1",
     "dompurify": "^3.4.17",
     "marked": "^18.1.1",
-    "typescript": "5.9.3"
+    "typescript": "7.0.2"
   },
   "dependencies": {
     "web-push": "3.6.7"
