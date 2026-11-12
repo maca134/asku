@@ -4,14 +4,12 @@ asku: an agent sends the user an end-to-end encrypted question form; the relay o
 Follow `docs/coding-standards.md`: it covers layout, the key/plaintext boundary, names, comments and tooling.
 
 - `api/` relay (Bun + SQLite), `shared/crypto.ts` wire crypto, `ui/` browser app (`session/` is the trusted part),
-  `skill/` the agent clients and SKILL.md.
-- `bun run build` first: it generates `ui/gen/` (schema validator and its types), which typecheck and the app need.
+  `skill/` the agent clients and SKILL.md, `test/` bun tests and `vectors.json`, `examples/` sample question and answer
+  JSON, `schema.json` the wire schema. After changing `skill/SKILL.md` or the clients, the `skill-local` skill is a
+  hands-on local test.
 - Before committing: `bun run check`, `bun run typecheck`, `bun test`.
-- Changing `ui/session/` or `ui/form/`: also run the `e2e-local` skill (`.claude/skills/e2e-local/SKILL.md`).
 - Changes to `shared/`, `ui/session/`, `ui/form/`, `ui/dom.tsx`, `skill/`, `api/`, `build.ts`, `Dockerfile`, `compose.yaml` or
   `.github/workflows/`: run the `security-reviewer` agent before the PR.
-- Wire-format or crypto changes go in all of `shared/crypto.ts`, `skill/ask.sh`, `skill/ask.ps1`, `test/vectors.json`
-  and the README's Crypto section together.
 
 ## Agent skills
 
@@ -25,4 +23,4 @@ Default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-huma
 
 ### Domain docs
 
-Single-context: one root `GLOSSARY.md` plus `docs/adr/`. See `docs/agents/domain.md`.
+Single-context: `GLOSSARY.md` and `docs/adr/` don't exist yet; they're created when needed. See `docs/agents/domain.md`.
